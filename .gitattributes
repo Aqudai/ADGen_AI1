@@ -1,0 +1,6 @@
+# Всегда LF в репозитории: иначе на Windows скрипты внутри Linux-контейнеров ломаются из-за CRLF
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary

@@ -1,0 +1,22 @@
+[project]
+name = "adgen-ai"
+version = "0.1.0"
+description = "AdGen AI — генератор рекламных баннеров для малого бизнеса"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# E/F — базовые ошибки, I — порядок импортов, UP — современный синтаксис, B — частые баги
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# Папка alembic/ в корне проекта — это миграции, а сам пакет alembic сторонний
+known-third-party = ["alembic"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

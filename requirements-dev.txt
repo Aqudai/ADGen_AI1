@@ -1,0 +1,5 @@
+# Зависимости для разработки: тесты и линтер
+-r requirements.txt
+pytest==9.1.1
+httpx2==2.13.1  # HTTP-клиент для TestClient (Starlette 1.x требует httpx2)
+ruff==0.17.0
