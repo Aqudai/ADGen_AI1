@@ -29,6 +29,11 @@ class Settings(BaseSettings):
 
     # Папка для загруженных фото и готовых баннеров
     media_dir: Path = Path("media")
+    max_upload_mb: int = 10
+
+    # Модель rembg для удаления фона. isnet-general-use точнее стандартной u2net
+    # на фото товаров. Модель по умолчанию скачивается при сборке Docker-образа.
+    rembg_model: str = "isnet-general-use"
 
     # Генерация фона нейросетью (используется со Спринта 2)
     image_provider: str = "huggingface"

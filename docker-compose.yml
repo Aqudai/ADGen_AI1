@@ -18,10 +18,11 @@ services:
       redis:
         condition: service_healthy
 
-  # Воркер Celery: выполняет фоновые задачи (генерацию баннеров)
+  # Воркер Celery: выполняет фоновые задачи (генерацию баннеров).
+  # concurrency=2 — две задачи одновременно; каждый процесс держит модель rembg в памяти (~1 ГБ)
   worker:
     build: .
-    command: celery -A app.worker:celery_app worker --loglevel=info
+    command: celery -A app.worker:celery_app worker --loglevel=info --concurrency=2
     env_file: .env
     volumes:
       - .:/app

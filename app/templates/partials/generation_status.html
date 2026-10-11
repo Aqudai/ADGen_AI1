@@ -1,0 +1,67 @@
+{#
+  Фрагмент статуса генерации. Пока идёт обработка, у блока есть hx-trigger="every 1s":
+  HTMX раз в секунду запрашивает этот же фрагмент и заменяет блок целиком (outerHTML).
+  Когда обработка закончилась, сервер возвращает блок без hx-trigger — опрос прекращается.
+#}
+{% if generation.in_progress %}
+<div id="generation-status"
+     hx-get="/generations/{{ generation.id }}/status" hx-trigger="every 1s" hx-swap="outerHTML"
+     class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+  <div class="flex items-center gap-5">
+    <img src="{{ generation.source_url }}" alt="Загруженное фото"
+         class="size-20 shrink-0 rounded-xl object-cover ring-1 ring-slate-200 sm:size-24">
+    <div class="min-w-0 flex-1">
+      {% if generation.status == "pending" %}
+      <p class="font-semibold">В очереди…</p>
+      <p class="text-sm text-slate-500">Ждём свободный обработчик</p>
+      {% else %}
+      <p class="font-semibold">Удаляем фон…</p>
+      <p class="text-sm text-slate-500">Обычно это занимает 5–20 секунд</p>
+      {% endif %}
+      <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div class="h-full animate-pulse rounded-full bg-linear-to-r from-indigo-500 to-fuchsia-500 transition-all duration-700"
+             style="width: {{ '35%' if generation.status == 'pending' else '75%' }}"></div>
+      </div>
+    </div>
+  </div>
+  <p class="mt-4 text-xs text-slate-400">Страница обновится сама — ничего нажимать не нужно.</p>
+</div>
+
+{% elif generation.status == "done" %}
+<div id="generation-status">
+  <div class="grid gap-6 sm:grid-cols-2">
+    <figure>
+      <div class="aspect-square overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200">
+        <img src="{{ generation.source_url }}" alt="Исходное фото" class="size-full object-contain">
+      </div>
+      <figcaption class="mt-2 text-center text-sm text-slate-500">Было</figcaption>
+    </figure>
+    <figure>
+      <div class="checkerboard aspect-square overflow-hidden rounded-2xl ring-1 ring-slate-200">
+        <img src="{{ generation.cutout_url }}" alt="Товар без фона" class="size-full object-contain">
+      </div>
+      <figcaption class="mt-2 text-center text-sm text-slate-500">Стало: фон удалён</figcaption>
+    </figure>
+  </div>
+  <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+    <a href="{{ generation.cutout_url }}" download="adgen-bez-fona.png"
+       class="rounded-xl bg-indigo-600 px-5 py-3 text-center font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+      Скачать PNG без фона
+    </a>
+    <a href="/create"
+       class="rounded-xl bg-white px-5 py-3 text-center font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
+      Загрузить другое фото
+    </a>
+  </div>
+</div>
+
+{% else %}
+<div id="generation-status" role="alert" class="rounded-2xl bg-rose-50 p-6 ring-1 ring-rose-200">
+  <p class="font-semibold text-rose-800">Не получилось</p>
+  <p class="mt-1 text-sm text-rose-700">{{ generation.error_message or "Неизвестная ошибка." }}</p>
+  <a href="/create"
+     class="mt-4 inline-block rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
+    Попробовать другое фото
+  </a>
+</div>
+{% endif %}

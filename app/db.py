@@ -1,7 +1,9 @@
 """Подключение к PostgreSQL через SQLAlchemy."""
 
 from collections.abc import Iterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -24,3 +26,7 @@ def get_db() -> Iterator[Session]:
     """Зависимость FastAPI: открывает сессию на время запроса и закрывает после."""
     with SessionLocal() as session:
         yield session
+
+
+# Короткая запись для параметра обработчика: def page(db: DbSession): ...
+DbSession = Annotated[Session, Depends(get_db)]

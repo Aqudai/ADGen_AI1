@@ -12,6 +12,11 @@ WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
+# Модель удаления фона (~180 МБ) скачиваем при сборке образа, а не при первой задаче,
+# чтобы первая обработка не ждала загрузку. REMBG_HOME — куда rembg складывает модели.
+ENV REMBG_HOME=/opt/rembg
+RUN python -c "from rembg import new_session; new_session('isnet-general-use')"
+
 COPY . .
 
 EXPOSE 8000
