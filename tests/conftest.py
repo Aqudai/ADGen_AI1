@@ -65,3 +65,19 @@ def make_image_bytes(size=(800, 600), color="red", fmt="JPEG", mode="RGB") -> by
     buffer = io.BytesIO()
     Image.new(mode, size, color).save(buffer, format=fmt)
     return buffer.getvalue()
+
+
+def register(client: TestClient, email: str = "owner@example.com", password: str = "secret123"):
+    """Регистрирует пользователя; после этого client «вошёл» (cookie сессии сохраняется)."""
+    return client.post(
+        "/register",
+        data={"email": email, "password": password, "password_confirm": password},
+        follow_redirects=False,
+    )
+
+
+@pytest.fixture
+def user_client(client) -> TestClient:
+    """Клиент от имени вошедшего пользователя."""
+    assert register(client).status_code == 303
+    return client

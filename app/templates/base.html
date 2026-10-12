@@ -33,8 +33,18 @@
         <span>{{ app_name }}</span>
       </a>
       <nav class="flex items-center gap-1 text-sm">
-        <a href="/create" class="rounded-lg px-3 py-2 font-medium text-indigo-600 transition hover:bg-indigo-50">Создать баннер</a>
-        <a href="/docs" class="rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">API</a>
+        {# В сессии лежит email вошедшего пользователя (см. app/auth.py) #}
+        {% if request.session.get("email") %}
+        <a href="/create" class="rounded-lg px-3 py-2 font-medium text-indigo-600 transition hover:bg-indigo-50">Создать</a>
+        <a href="/history" class="rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">История</a>
+        <a href="/profile" class="hidden rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 sm:block">Профиль</a>
+        <form action="/logout" method="post">
+          <button class="rounded-lg px-3 py-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" title="{{ request.session.get('email') }}">Выйти</button>
+        </form>
+        {% else %}
+        <a href="/login" class="rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Войти</a>
+        <a href="/register" class="rounded-lg bg-indigo-600 px-3 py-2 font-medium text-white transition hover:bg-indigo-700">Регистрация</a>
+        {% endif %}
       </nav>
     </div>
   </header>

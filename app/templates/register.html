@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — {{ app_name }}{% endblock %}
+{% set input = "mt-1.5 block w-full rounded-xl border-0 bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" %}
+{% block content %}
+<section class="mx-auto max-w-md px-4 py-12 sm:py-16">
+  <h1 class="text-3xl font-bold tracking-tight">Регистрация</h1>
+  <p class="mt-2 text-slate-600">Аккаунт нужен, чтобы сохранять историю баннеров и фирменный стиль.</p>
+  <form action="/register" method="post" class="mt-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    {% include "partials/form_error.html" %}
+    <label class="block text-sm font-medium">Email
+      <input name="email" type="email" required autocomplete="email" value="{{ email }}" class="{{ input }}">
+    </label>
+    <label class="mt-4 block text-sm font-medium">Пароль <span class="font-normal text-slate-400">— не короче 8 символов</span>
+      <input name="password" type="password" required minlength="8" autocomplete="new-password" class="{{ input }}">
+    </label>
+    <label class="mt-4 block text-sm font-medium">Пароль ещё раз
+      <input name="password_confirm" type="password" required minlength="8" autocomplete="new-password" class="{{ input }}">
+    </label>
+    <button class="mt-6 w-full rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700">Зарегистрироваться</button>
+    <p class="mt-4 text-center text-sm text-slate-500">Уже есть аккаунт? <a href="/login" class="font-medium text-indigo-600 hover:underline">Войти</a></p>
+  </form>
+</section>
+{% endblock %}

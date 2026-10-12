@@ -85,4 +85,8 @@ VARIANTS = {
 }
 
 MAX_PROMO_LENGTH = 120
+
+# Цвета бренда по умолчанию (пока пользователь не настроил профиль): плашка и бейдж
+DEFAULT_PRIMARY = "#4F46E5"
+DEFAULT_SECONDARY = "#E11D74"
 TWOGIS_TITLE_LIMIT = 45  # длина заголовка скидки в карточке 2GIS

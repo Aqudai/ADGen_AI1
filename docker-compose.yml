@@ -1,9 +1,13 @@
 # Локальная разработка: docker compose up --build
+# Для сервера — docker-compose.prod.yml (см. docs/DEPLOY.md)
 services:
   # Веб-приложение FastAPI. При старте применяет миграции базы.
   web:
     build: .
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    # В разработке — root: код смонтирован из папки проекта, и root может писать в неё
+    # на любой ОС (Windows, macOS, Linux). На сервере контейнер работает от пользователя app.
+    user: root
     env_file: .env
     environment:
       # Автоперезагрузка при правке кода (опрос файлов нужен для Docker Desktop на Windows)
@@ -23,6 +27,7 @@ services:
   worker:
     build: .
     command: celery -A app.worker:celery_app worker --loglevel=info --concurrency=2
+    user: root
     env_file: .env
     volumes:
       - .:/app

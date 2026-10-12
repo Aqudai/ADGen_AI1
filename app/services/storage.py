@@ -4,6 +4,7 @@
 Если позже перейдём на S3-совместимое хранилище, менять нужно будет только этот модуль.
 """
 
+import shutil
 import uuid
 from pathlib import Path
 
@@ -32,3 +33,9 @@ def save_image(image: Image.Image, rel_path: str, **save_options) -> None:
     path = media_path(rel_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path, **save_options)
+
+
+def copy_file(source_rel: str, target_rel: str) -> None:
+    target = media_path(target_rel)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(media_path(source_rel), target)

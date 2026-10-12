@@ -1,0 +1,72 @@
+# Запуск на сервере: docker compose -f docker-compose.prod.yml up -d --build
+# Отличия от разработки: нет dev-зависимостей и автоперезагрузки, код внутри образа
+# (не смонтирован с диска), контейнеры перезапускаются после сбоя или перезагрузки сервера,
+# база наружу не открыта. Подробно — docs/DEPLOY.md.
+services:
+  web:
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "false"
+    image: adgen-ai:prod
+    # --proxy-headers: сервер стоит за HTTPS-прокси (Caddy), берём от него реальный адрес и схему
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+             --proxy-headers --forwarded-allow-ips='*'"
+    env_file: .env
+    environment:
+      DEBUG: "false"
+    ports:
+      - "127.0.0.1:8000:8000" # только для прокси на этом же сервере
+    volumes:
+      - media:/app/media # фото и баннеры — общие для web и worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: adgen-ai:prod
+    command: celery -A app.worker:celery_app worker --loglevel=info --concurrency=2
+    env_file: .env
+    environment:
+      DEBUG: "false"
+    volumes:
+      - media:/app/media
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started # web собирает образ и применяет миграции
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  media:

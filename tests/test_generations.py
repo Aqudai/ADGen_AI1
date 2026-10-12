@@ -33,6 +33,12 @@ def fake_queue(monkeypatch) -> FakeTask:
     return fake
 
 
+@pytest.fixture
+def client(user_client):
+    """Все тесты этого файла — от имени вошедшего пользователя."""
+    return user_client
+
+
 @pytest.fixture(autouse=True)
 def no_ai(monkeypatch):
     """В тестах пайплайна сцену рисуем без нейросети (вызов HF проверяется в test_scene.py)."""
@@ -46,13 +52,11 @@ def fake_remove_background(image: Image.Image) -> Image.Image:
     return cutout
 
 
-def submit(client, photo=None, logo=None, **fields):
+def submit(client, photo=None, **fields):
     data = {"promo_text": PROMO, "style": "cozy", "formats": ["post", "2gis"]} | fields
     files = {}
     if photo is not False:
         files["photo"] = ("photo.jpg", photo or make_image_bytes(), "image/jpeg")
-    if logo is not None:
-        files["logo"] = ("logo.png", logo, "image/png")
     return client.post("/generations", data=data, files=files, follow_redirects=False)
 
 
@@ -106,7 +110,6 @@ def test_submit_saves_generation_and_queues_task(client, session_factory, media_
         ({"formats": ["post", "billboard"]}, "Неизвестный формат"),
         ({"photo": False}, "Выберите фото"),
         ({"photo": b"not an image"}, "Не удалось открыть файл"),
-        ({"logo": b"not an image"}, "Не удалось открыть логотип"),
     ],
 )
 def test_form_errors(client, fake_queue, fields, message):
@@ -126,14 +129,6 @@ def test_photo_too_large(client, monkeypatch):
     response = submit(client)
     assert response.status_code == 400
     assert "Фото больше" in response.text
-
-
-def test_logo_keeps_transparency(client, session_factory, media_dir):
-    logo = make_image_bytes((300, 100), color=(0, 0, 255, 0), fmt="PNG", mode="RGBA")
-    generation = created_generation(submit(client, logo=logo), session_factory)
-    saved = Image.open(media_dir / generation.logo_path)
-    assert saved.mode == "RGBA"
-    assert saved.getpixel((5, 5))[3] == 0
 
 
 def test_pipeline_creates_banners(client, monkeypatch, session_factory, media_dir):
@@ -162,11 +157,36 @@ def test_pipeline_creates_banners(client, monkeypatch, session_factory, media_di
     assert (media_dir / generation.scene_path).exists()
 
 
-def test_pipeline_with_logo(client, monkeypatch, session_factory):
-    logo = make_image_bytes((300, 100), color="navy", fmt="PNG")
-    generation = run_pipeline(client, monkeypatch, session_factory, logo=logo, formats=["post"])
+def test_pipeline_uses_brand_profile(client, monkeypatch, session_factory, media_dir):
+    """Логотип и цвета из профиля бренда попадают в генерацию (как снимок)."""
+    logo = make_image_bytes((300, 100), color=(0, 0, 255, 0), fmt="PNG", mode="RGBA")
+    client.post(
+        "/profile",
+        data={"business_name": "Кофейня", "primary_color": "#112233", "secondary_color": "#AA0000"},
+        files={"logo": ("logo.png", logo, "image/png")},
+    )
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+
     assert generation.status == GenerationStatus.DONE
-    assert len(generation.banners) == 2
+    assert generation.brand_name == "Кофейня"
+    assert generation.primary_color == "#112233"
+    assert generation.secondary_color == "#AA0000"
+    saved_logo = Image.open(media_dir / generation.logo_path)
+    assert saved_logo.mode == "RGBA" and saved_logo.getpixel((5, 5))[3] == 0  # прозрачность цела
+
+
+def test_pipeline_with_name_instead_of_logo(client, monkeypatch, session_factory):
+    client.post(
+        "/profile",
+        data={
+            "business_name": "Суши Хаус",
+            "primary_color": "#E8743B",
+            "secondary_color": "#E11D48",
+        },
+    )
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    assert generation.status == GenerationStatus.DONE
+    assert generation.logo_path is None and generation.brand_name == "Суши Хаус"
 
 
 def test_pipeline_failure_is_saved(client, monkeypatch, session_factory):
@@ -254,6 +274,7 @@ def test_sprint1_generation_without_banners_still_renders(client, session_factor
         db.add(
             Generation(
                 id=generation_id,
+                user_id=1,
                 status=GenerationStatus.DONE,
                 source_path="generations/x/source.jpg",
                 cutout_path="generations/x/cutout.png",

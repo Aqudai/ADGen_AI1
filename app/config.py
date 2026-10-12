@@ -6,6 +6,7 @@
 
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -15,7 +16,10 @@ class Settings(BaseSettings):
 
     app_name: str = "AdGen AI"
     debug: bool = False
+    # Подпись cookie сессии: зная ключ, можно «войти» под любым пользователем — держим в секрете
     secret_key: str
+    # True на сервере с HTTPS: браузер будет отправлять cookie сессии только по HTTPS
+    cookie_secure: bool = False
 
     # PostgreSQL
     postgres_user: str
@@ -46,6 +50,13 @@ class Settings(BaseSettings):
     hf_provider: str = "nscale"
     hf_model: str = "black-forest-labs/FLUX.1-schnell"
     hf_timeout: int = 90  # секунд ждать картинку
+
+    @model_validator(mode="after")
+    def check_secret_key(self):
+        # На сервере (DEBUG=false) не даём запуститься с ключом-заглушкой из .env.example
+        if not self.debug and self.secret_key == "change-me":
+            raise ValueError("Задайте свой SECRET_KEY в .env (сейчас стоит change-me)")
+        return self
 
     @property
     def database_url(self) -> URL:

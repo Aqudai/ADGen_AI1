@@ -13,6 +13,7 @@ from app.services.background import remove_background
 from app.services.banner import render_banner
 from app.services.presets import FORMATS, STYLES
 from app.services.scene import generate_scene
+from app.services.text import name_logo
 from app.worker import celery_app
 
 logger = get_task_logger(__name__)
@@ -61,19 +62,25 @@ def process_generation(generation_id: str) -> None:
 
             # 3. Баннеры: каждый выбранный формат × каждый вариант оформления
             set_step(db, generation, GenerationStep.COMPOSE)
+            style = STYLES[generation.style]
             logo = None
             if generation.logo_path:
                 logo = Image.open(storage.media_path(generation.logo_path)).convert("RGBA")
+            elif generation.brand_name:
+                # Логотипа нет, но есть название — рисуем плашку с названием бизнеса
+                logo = name_logo(generation.brand_name, generation.primary_color or style.accent)
             for format_key in generation.formats:
                 for variant in FORMATS[format_key].variants:
                     image = render_banner(
                         scene.image,
                         cutout,
                         generation.promo_text,
-                        STYLES[generation.style],
+                        style,
                         FORMATS[format_key],
                         variant,
                         logo=logo,
+                        accent=generation.primary_color,
+                        badge_color=generation.secondary_color,
                     )
                     path = storage.generation_file(generation.id, f"{format_key}-{variant}.jpg")
                     storage.save_image(image, path, format="JPEG", quality=92)

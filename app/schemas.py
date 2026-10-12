@@ -1,9 +1,10 @@
 """Pydantic-схемы: проверка данных формы и ответы JSON API."""
 
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from app.services.presets import FORMATS, MAX_PROMO_LENGTH, STYLES
 
@@ -41,6 +42,60 @@ class BannerRequest(BaseModel):
         if any(key not in FORMATS for key in value):
             raise ValueError("Неизвестный формат баннера.")
         return value
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+class RegisterForm(BaseModel):
+    email: str
+    password: str
+    password_confirm: str
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not EMAIL_RE.match(value) or len(value) > 255:
+            raise ValueError("Введите корректный email.")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Пароль должен быть не короче 8 символов.")
+        if len(value) > 128:
+            raise ValueError("Пароль слишком длинный.")
+        return value
+
+    @model_validator(mode="after")
+    def check_passwords_match(self):
+        if self.password != self.password_confirm:
+            raise ValueError("Пароли не совпадают.")
+        return self
+
+
+class BrandForm(BaseModel):
+    business_name: str
+    primary_color: str
+    secondary_color: str
+
+    @field_validator("business_name")
+    @classmethod
+    def check_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) > 40:
+            raise ValueError("Название бизнеса — не длиннее 40 символов.")
+        return value
+
+    @field_validator("primary_color", "secondary_color")
+    @classmethod
+    def check_color(cls, value: str) -> str:
+        if not COLOR_RE.match(value):
+            raise ValueError("Цвет должен быть в формате #RRGGBB.")
+        return value.upper()
 
 
 def first_error(exc: ValidationError) -> str:

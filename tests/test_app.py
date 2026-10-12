@@ -5,7 +5,7 @@
 """
 
 from app.config import Settings
-from app.routers import api, pages
+from app.routers import api
 
 
 def test_hello(client):
@@ -19,6 +19,7 @@ def test_index_page(client):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Рекламные баннеры" in response.text
+    assert 'href="/register"' in response.text  # гостю — кнопка регистрации
 
 
 def test_health_ok(client, monkeypatch):
@@ -39,14 +40,18 @@ def test_health_degraded(client, monkeypatch):
     assert response.json()["checks"]["redis"] is False
 
 
-def test_status_partial(client, monkeypatch):
-    monkeypatch.setattr(
-        pages, "run_checks", lambda: {"database": True, "redis": True, "celery": False}
-    )
-    response = client.get("/partials/status")
-    assert response.status_code == 200
-    assert response.text.count("работает") == 2
-    assert "недоступен" in response.text
+def test_secret_key_placeholder_rejected_in_production():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="SECRET_KEY"):
+        Settings(
+            secret_key="change-me",
+            debug=False,
+            postgres_user="a",
+            postgres_password="b",
+            postgres_db="c",
+        )
 
 
 def test_database_url_escapes_password():

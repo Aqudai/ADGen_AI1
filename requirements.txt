@@ -1,6 +1,7 @@
 # Веб
 fastapi==0.143.0
 uvicorn[standard]==0.54.0
+itsdangerous==2.2.0  # подпись cookie сессии (SessionMiddleware)
 jinja2==3.1.6
 python-multipart==0.0.32
 

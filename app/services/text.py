@@ -173,8 +173,30 @@ def draw_badge(
     ImageDraw.Draw(canvas).text((x, y), label, font=fnt, fill=text_color, anchor="mm")
 
 
-def readable_text_color(background: str) -> str:
-    """Белый или почти чёрный текст — смотря что лучше читается на этом фоне."""
-    r, g, b = Image.new("RGB", (1, 1), background).getpixel((0, 0))
-    luminance = 0.299 * r + 0.587 * g + 0.114 * b
-    return "#FFFFFF" if luminance < 160 else "#111827"
+def luminance(color: str) -> float:
+    r, g, b = Image.new("RGB", (1, 1), color).getpixel((0, 0))
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def readable_text_color(background: str, dark: str = "#111827") -> str:
+    """Белый или тёмный текст — смотря что лучше читается на этом фоне."""
+    if luminance(background) < 160:
+        return "#FFFFFF"
+    # На светлом фоне — тёмный цвет; фирменный подходит, только если он сам тёмный
+    return dark if luminance(dark) < 110 else "#111827"
+
+
+def name_logo(name: str, color: str) -> Image.Image:
+    """Логотип-заглушка из названия бизнеса: скруглённая плашка фирменного цвета.
+
+    Используется, когда в профиле есть название, но не загружен логотип.
+    """
+    fnt = font(64)
+    left, top, right, bottom = fnt.getbbox(name)
+    pad_x, pad_y = 36, 22
+    width, height = right - left + 2 * pad_x, bottom - top + 2 * pad_y
+    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=height // 2, fill=color)
+    draw.text((pad_x - left, pad_y - top), name, font=fnt, fill=readable_text_color(color))
+    return image

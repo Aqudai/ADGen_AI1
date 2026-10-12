@@ -10,30 +10,34 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.auth import CurrentUser
 from app.config import settings
 from app.db import DbSession
-from app.models import Generation
+from app.models import Generation, User
 from app.schemas import BannerRequest, first_error
 from app.services import storage
-from app.services.images import ImageValidationError, prepare_logo_image, prepare_source_image
+from app.services.images import ImageValidationError, prepare_source_image
 from app.services.presets import FORMATS, MAX_PROMO_LENGTH, STYLES
 from app.tasks import process_generation
 from app.templating import templates
 
 router = APIRouter()
 
-MAX_LOGO_MB = 5
 
-
-def get_generation_or_404(db: Session, generation_id: uuid.UUID) -> Generation:
+def get_generation_or_404(db: Session, generation_id: uuid.UUID, user: User) -> Generation:
+    """Генерация текущего пользователя. Чужая — тоже 404: не подсказываем, что она существует."""
     generation = db.get(Generation, generation_id)
-    if generation is None:
+    if generation is None or generation.user_id != user.id:
         raise HTTPException(status_code=404, detail="Генерация не найдена")
     return generation
 
 
 def render_create_page(
-    request: Request, error: str | None = None, form: dict | None = None, status_code: int = 200
+    request: Request,
+    user: User,
+    error: str | None = None,
+    form: dict | None = None,
+    status_code: int = 200,
 ):
     # По умолчанию: уютный стиль и все форматы. При ошибке — то, что ввёл пользователь.
     form = form or {"promo_text": "", "style": "cozy", "formats": list(FORMATS)}
@@ -46,7 +50,7 @@ def render_create_page(
             "styles": STYLES.values(),
             "formats": FORMATS.values(),
             "max_upload_mb": settings.max_upload_mb,
-            "max_logo_mb": MAX_LOGO_MB,
+            "brand": user.brand,
             "max_promo_length": MAX_PROMO_LENGTH,
         },
         status_code=status_code,
@@ -58,16 +62,16 @@ def file_too_big(upload: UploadFile, max_mb: int) -> bool:
 
 
 @router.get("/create", response_class=HTMLResponse)
-def create_page(request: Request):
-    return render_create_page(request)
+def create_page(request: Request, user: CurrentUser):
+    return render_create_page(request, user)
 
 
 @router.post("/generations")
 def create_generation(
     request: Request,
     db: DbSession,
+    user: CurrentUser,
     photo: Annotated[UploadFile | None, File()] = None,
-    logo: Annotated[UploadFile | None, File()] = None,
     promo_text: Annotated[str, Form()] = "",
     style: Annotated[str, Form()] = "",
     formats: Annotated[list[str] | None, Form()] = None,
@@ -76,7 +80,7 @@ def create_generation(
     form = {"promo_text": promo_text, "style": style, "formats": formats or []}
 
     def error(message: str):
-        return render_create_page(request, message, form, status_code=400)
+        return render_create_page(request, user, message, form, status_code=400)
 
     try:
         params = BannerRequest(promo_text=promo_text, style=style, formats=formats or [])
@@ -87,27 +91,30 @@ def create_generation(
         return error("Выберите фото товара.")
     if file_too_big(photo, settings.max_upload_mb):
         return error(f"Фото больше {settings.max_upload_mb} МБ.")
-    has_logo = logo is not None and bool(logo.filename)
-    if has_logo and file_too_big(logo, MAX_LOGO_MB):
-        return error(f"Логотип больше {MAX_LOGO_MB} МБ.")
 
     try:
         image = prepare_source_image(photo.file)
-        logo_image = prepare_logo_image(logo.file) if has_logo else None
     except ImageValidationError as exc:
         return error(str(exc))
 
     generation = Generation(
         id=uuid.uuid4(),
+        user_id=user.id,
         promo_text=params.promo_text,
         style=params.style,
         formats=params.formats,
     )
     generation.source_path = storage.generation_file(generation.id, "source.jpg")
     storage.save_image(image, generation.source_path, format="JPEG", quality=92)
-    if logo_image is not None:
-        generation.logo_path = storage.generation_file(generation.id, "logo.png")
-        storage.save_image(logo_image, generation.logo_path, format="PNG")
+
+    # Снимок профиля бренда: история не изменится, если профиль потом отредактируют
+    if user.brand:
+        generation.brand_name = user.brand.business_name or None
+        generation.primary_color = user.brand.primary_color
+        generation.secondary_color = user.brand.secondary_color
+        if user.brand.logo_path:
+            generation.logo_path = storage.generation_file(generation.id, "logo.png")
+            storage.copy_file(user.brand.logo_path, generation.logo_path)
 
     db.add(generation)
     # Сначала сохраняем в базу, потом ставим задачу — иначе воркер может не найти запись
@@ -119,24 +126,24 @@ def create_generation(
 
 
 @router.get("/generations/{generation_id}", response_class=HTMLResponse)
-def generation_page(request: Request, generation_id: uuid.UUID, db: DbSession):
-    generation = get_generation_or_404(db, generation_id)
+def generation_page(request: Request, generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    generation = get_generation_or_404(db, generation_id, user)
     return templates.TemplateResponse(request, "generation.html", {"generation": generation})
 
 
 @router.get("/generations/{generation_id}/status", response_class=HTMLResponse)
-def generation_status(request: Request, generation_id: uuid.UUID, db: DbSession):
+def generation_status(request: Request, generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """HTMX-фрагмент: прогресс, пока идёт обработка, затем галерея баннеров."""
-    generation = get_generation_or_404(db, generation_id)
+    generation = get_generation_or_404(db, generation_id, user)
     return templates.TemplateResponse(
         request, "partials/generation_status.html", {"generation": generation}
     )
 
 
 @router.get("/generations/{generation_id}/banners.zip")
-def download_all(generation_id: uuid.UUID, db: DbSession):
+def download_all(generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """Все баннеры одним архивом."""
-    generation = get_generation_or_404(db, generation_id)
+    generation = get_generation_or_404(db, generation_id, user)
     if not generation.banners:
         raise HTTPException(status_code=404, detail="Баннеры ещё не готовы")
 

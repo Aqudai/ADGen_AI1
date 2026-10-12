@@ -100,9 +100,15 @@ def render_banner(
     variant: str,
     logo: Image.Image | None = None,
     accent: str | None = None,
+    badge_color: str | None = None,
 ) -> Image.Image:
-    """Собирает один баннер. accent — цвет плашки/бейджа (по умолчанию из стиля)."""
+    """Собирает один баннер.
+
+    accent — цвет плашки, badge_color — цвет бейджа скидки. Это фирменные цвета
+    из профиля бренда; если профиль не настроен — цвет стиля.
+    """
     accent = accent or style.accent
+    badge_color = badge_color or accent
     size = fmt.size
     short_side = min(size)
 
@@ -128,7 +134,7 @@ def render_banner(
             canvas, layout.scrim, (255, 255, 255) if light else (0, 0, 0), 200 if light else 185
         )
         text_color, shadow = ("#111827", False) if light else ("#FFFFFF", True)
-        badge_fill, badge_text = accent, "#FFFFFF"
+        badge_fill = badge_color
     else:
         panel = to_px(layout.panel, size)
         panel_layer = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -136,7 +142,8 @@ def render_banner(
         panel_layer.putalpha(panel_layer.getchannel("A").point(lambda a: a * 240 // 255))
         canvas.alpha_composite(panel_layer)
         text_color, shadow = text.readable_text_color(accent), False
-        badge_fill, badge_text = "#FFFFFF", accent
+        # Бейдж на фоне плашки того же цвета потерялся бы — тогда делаем его белым
+        badge_fill = "#FFFFFF" if badge_color == accent else badge_color
 
     compose.place_product(canvas, cutout, to_px(layout.product, size))
 
@@ -159,7 +166,7 @@ def render_banner(
             (int(bx * size[0]), int(by * size[1])),
             int(br * short_side),
             fill=badge_fill,
-            text_color=badge_text,
+            text_color=text.readable_text_color(badge_fill, dark=accent),
         )
 
     if logo is not None:

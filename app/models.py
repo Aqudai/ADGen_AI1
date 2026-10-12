@@ -12,12 +12,12 @@ from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.services.presets import FORMATS, STYLES, VARIANTS
+from app.services.presets import DEFAULT_PRIMARY, DEFAULT_SECONDARY, FORMATS, STYLES, VARIANTS
 from app.services.storage import media_url
 
 
 class User(Base):
-    """Пользователь сервиса. Регистрация и вход появятся в Спринте 3."""
+    """Пользователь сервиса."""
 
     __tablename__ = "users"
 
@@ -25,6 +25,27 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    brand: Mapped["BrandProfile | None"] = relationship(back_populates="user")
+
+
+class BrandProfile(Base):
+    """Профиль бренда: название, логотип и фирменные цвета — подставляются в баннеры."""
+
+    __tablename__ = "brand_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    business_name: Mapped[str] = mapped_column(String(80), default="")
+    logo_path: Mapped[str | None] = mapped_column(String(255))
+    primary_color: Mapped[str] = mapped_column(String(7), default=DEFAULT_PRIMARY)
+    secondary_color: Mapped[str] = mapped_column(String(7), default=DEFAULT_SECONDARY)
+
+    user: Mapped[User] = relationship(back_populates="brand")
+
+    @property
+    def logo_url(self) -> str | None:
+        return media_url(self.logo_path) if self.logo_path else None
 
 
 class GenerationStatus(StrEnum):
@@ -58,7 +79,7 @@ class Generation(Base):
     __tablename__ = "generations"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # До Спринта 3 (регистрация) генерации анонимные, поэтому поле может быть пустым
+    # Пустое у генераций Спринтов 1–2 (до регистрации)
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
@@ -69,6 +90,11 @@ class Generation(Base):
     promo_text: Mapped[str | None] = mapped_column(Text)
     style: Mapped[str | None] = mapped_column(String(20))
     formats: Mapped[list[str] | None] = mapped_column(JSON)
+    # Снимок профиля бренда на момент генерации: если профиль потом поменяют,
+    # старые баннеры в истории останутся такими, какими были сделаны
+    brand_name: Mapped[str | None] = mapped_column(String(80))
+    primary_color: Mapped[str | None] = mapped_column(String(7))
+    secondary_color: Mapped[str | None] = mapped_column(String(7))
 
     # Пути к файлам относительно папки media/
     source_path: Mapped[str] = mapped_column(String(255))
@@ -97,6 +123,11 @@ class Generation(Base):
     @property
     def in_progress(self) -> bool:
         return self.status in (GenerationStatus.PENDING, GenerationStatus.PROCESSING)
+
+    @property
+    def preview_url(self) -> str:
+        """Картинка для списка истории: первый баннер, иначе исходное фото."""
+        return self.banners[0].image_url if self.banners else self.source_url
 
     @property
     def style_label(self) -> str | None:

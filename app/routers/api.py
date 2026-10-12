@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from app.auth import CurrentUser
 from app.config import settings
 from app.db import DbSession
 from app.routers.generations import get_generation_or_404
@@ -31,5 +32,5 @@ def health() -> JSONResponse:
 
 
 @router.get("/api/generations/{generation_id}", response_model=GenerationOut)
-def generation_detail(generation_id: uuid.UUID, db: DbSession):
-    return get_generation_or_404(db, generation_id)
+def generation_detail(generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    return get_generation_or_404(db, generation_id, user)

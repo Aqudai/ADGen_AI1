@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}История — {{ app_name }}{% endblock %}
+{% set status_labels = {"pending": "В очереди", "processing": "Создаётся", "done": "Готово", "failed": "Ошибка"} %}
+{% block content %}
+<section class="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">История</h1>
+      <p class="mt-1 text-slate-600">Все ваши генерации, новые сверху.</p>
+    </div>
+    <a href="/create" class="rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700">Создать баннер</a>
+  </div>
+
+  {% if generations %}
+  <ul class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    {% for generation in generations %}
+    <li>
+      <a href="/generations/{{ generation.id }}" class="block overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
+        <img src="{{ generation.preview_url }}" alt="" loading="lazy" class="aspect-square w-full bg-slate-100 object-cover">
+        <div class="p-4">
+          <p class="line-clamp-2 font-medium">{{ generation.promo_text or "Удаление фона" }}</p>
+          <p class="mt-2 flex items-center justify-between text-sm text-slate-500">
+            <span>{{ generation.created_at.strftime("%d.%m.%Y %H:%M") }}</span>
+            <span class="{{ 'text-rose-600' if generation.status == 'failed' else 'text-slate-500' }}">
+              {{ status_labels.get(generation.status, generation.status) }}{% if generation.banners %} · {{ generation.banners|length }} шт.{% endif %}
+            </span>
+          </p>
+        </div>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="mt-8 rounded-2xl bg-white p-10 text-center ring-1 ring-slate-200">
+    <p class="font-semibold">Здесь пока пусто</p>
+    <p class="mt-1 text-slate-500">Создайте первый баннер — он появится в истории.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
