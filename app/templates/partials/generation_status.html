@@ -4,6 +4,13 @@
   Когда обработка закончилась, сервер возвращает блок без hx-trigger — опрос прекращается.
 #}
 {% if generation.in_progress %}
+{% set steps = [
+  ("cutout", "Удаляем фон с фото"),
+  ("scene", "Рисуем сцену — нейросети нужно до минуты"),
+  ("compose", "Собираем баннеры"),
+] %}
+{% set step_keys = ["cutout", "scene", "compose"] %}
+{% set current = step_keys.index(generation.step) if generation.step in step_keys else -1 %}
 <div id="generation-status"
      hx-get="/generations/{{ generation.id }}/status" hx-trigger="every 1s" hx-swap="outerHTML"
      class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
@@ -11,48 +18,100 @@
     <img src="{{ generation.source_url }}" alt="Загруженное фото"
          class="size-20 shrink-0 rounded-xl object-cover ring-1 ring-slate-200 sm:size-24">
     <div class="min-w-0 flex-1">
-      {% if generation.status == "pending" %}
-      <p class="font-semibold">В очереди…</p>
-      <p class="text-sm text-slate-500">Ждём свободный обработчик</p>
-      {% else %}
-      <p class="font-semibold">Удаляем фон…</p>
-      <p class="text-sm text-slate-500">Обычно это занимает 5–20 секунд</p>
-      {% endif %}
+      <p class="font-semibold">{{ "В очереди…" if current < 0 else "Создаём баннеры…" }}</p>
       <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
         <div class="h-full animate-pulse rounded-full bg-linear-to-r from-indigo-500 to-fuchsia-500 transition-all duration-700"
-             style="width: {{ '35%' if generation.status == 'pending' else '75%' }}"></div>
+             style="width: {{ [10, 30, 60, 85][current + 1] }}%"></div>
       </div>
     </div>
   </div>
-  <p class="mt-4 text-xs text-slate-400">Страница обновится сама — ничего нажимать не нужно.</p>
+  <ol class="mt-5 space-y-2 text-sm">
+    {% for key, label in steps %}
+    <li class="flex items-center gap-3 {{ 'text-slate-400' if loop.index0 > current else 'text-slate-700' }}">
+      {% if loop.index0 < current %}
+      <span class="grid size-5 place-items-center rounded-full bg-emerald-500 text-xs text-white">✓</span>
+      {% elif loop.index0 == current %}
+      <span class="size-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600"></span>
+      {% else %}
+      <span class="size-5 rounded-full border-2 border-slate-200"></span>
+      {% endif %}
+      {{ label }}
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="mt-5 text-xs text-slate-400">Страница обновится сама — ничего нажимать не нужно.</p>
 </div>
 
 {% elif generation.status == "done" %}
-<div id="generation-status">
-  <div class="grid gap-6 sm:grid-cols-2">
-    <figure>
-      <div class="aspect-square overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200">
-        <img src="{{ generation.source_url }}" alt="Исходное фото" class="size-full object-contain">
-      </div>
-      <figcaption class="mt-2 text-center text-sm text-slate-500">Было</figcaption>
-    </figure>
-    <figure>
-      <div class="checkerboard aspect-square overflow-hidden rounded-2xl ring-1 ring-slate-200">
-        <img src="{{ generation.cutout_url }}" alt="Товар без фона" class="size-full object-contain">
-      </div>
-      <figcaption class="mt-2 text-center text-sm text-slate-500">Стало: фон удалён</figcaption>
-    </figure>
+<div id="generation-status" class="space-y-10">
+  {% if generation.scene_note %}
+  <div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">
+    Фон нарисован без нейросети: {{ generation.scene_note }}.
   </div>
-  <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-    <a href="{{ generation.cutout_url }}" download="adgen-bez-fona.png"
+  {% endif %}
+
+  {% if generation.banners %}
+  <div class="flex flex-wrap gap-3">
+    <a href="/generations/{{ generation.id }}/banners.zip"
        class="rounded-xl bg-indigo-600 px-5 py-3 text-center font-semibold text-white shadow-sm transition hover:bg-indigo-700">
-      Скачать PNG без фона
+      Скачать все баннеры (ZIP)
     </a>
     <a href="/create"
        class="rounded-xl bg-white px-5 py-3 text-center font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
-      Загрузить другое фото
+      Создать ещё
     </a>
   </div>
+
+  {% for title, banners in generation.banners_by_format() %}
+  <section>
+    <h2 class="text-lg font-semibold">{{ title }}</h2>
+    {% if banners[0].format == "2gis" %}
+    <p class="mt-1 text-sm text-slate-500">
+      Фото для блока «Скидки» в карточке 2GIS — без текста, как требует 2GIS.
+      Текст акции введите в поле «Заголовок» (до {{ twogis_title_limit }} символов).
+      {% if generation.promo_text|length > twogis_title_limit %}
+      <span class="text-amber-700">Ваш текст длиннее — сократите его для 2GIS.</span>
+      {% endif %}
+    </p>
+    {% endif %}
+    <div class="mt-4 grid gap-6 sm:grid-cols-2">
+      {% for banner in banners %}
+      <figure class="flex flex-col">
+        <a href="{{ banner.image_url }}" target="_blank" rel="noopener"
+           class="block overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
+          <img src="{{ banner.image_url }}" alt="{{ title }}, {{ banner.variant_label }}" loading="lazy"
+               class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}">
+        </a>
+        <figcaption class="mt-3 flex items-center justify-between gap-3">
+          <span class="text-sm text-slate-600">{{ banner.variant_label }}</span>
+          <a href="{{ banner.image_url }}" download="{{ banner.download_name }}"
+             class="rounded-lg px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50">
+            Скачать
+          </a>
+        </figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  {% endif %}
+
+  {# Товар без фона — пригодится и отдельно (например, для карточки товара) #}
+  <section class="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="flex items-center gap-4">
+      <div class="checkerboard size-20 shrink-0 overflow-hidden rounded-xl ring-1 ring-slate-200">
+        <img src="{{ generation.cutout_url }}" alt="Товар без фона" class="size-full object-contain">
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold">Товар без фона</p>
+        <p class="text-sm text-slate-500">PNG с прозрачным фоном</p>
+      </div>
+      <a href="{{ generation.cutout_url }}" download="adgen-bez-fona.png"
+         class="rounded-lg px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50">
+        Скачать
+      </a>
+    </div>
+  </section>
 </div>
 
 {% else %}
@@ -61,7 +120,7 @@
   <p class="mt-1 text-sm text-rose-700">{{ generation.error_message or "Неизвестная ошибка." }}</p>
   <a href="/create"
      class="mt-4 inline-block rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
-    Попробовать другое фото
+    Попробовать ещё раз
   </a>
 </div>
 {% endif %}

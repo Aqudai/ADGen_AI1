@@ -1,5 +1,5 @@
-// Страница загрузки: drag & drop, предпросмотр фото и проверка файла до отправки.
-// Сервер всё равно проверяет файл сам — здесь только удобство для пользователя.
+// Форма создания баннера: drag & drop, предпросмотр фото, счётчик символов
+// и проверка до отправки. Сервер всё равно проверяет всё сам — здесь только удобство.
 
 const form = document.getElementById("upload-form");
 const dropzone = document.getElementById("dropzone");
@@ -9,6 +9,8 @@ const preview = document.getElementById("preview");
 const fileName = document.getElementById("file-name");
 const clientError = document.getElementById("client-error");
 const submitButton = document.getElementById("submit-btn");
+const promoText = document.getElementById("promo-text");
+const promoCount = document.getElementById("promo-count");
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = Number(dropzone.dataset.maxMb) * 1024 * 1024;
@@ -63,10 +65,18 @@ dropzone.addEventListener("drop", (event) => {
   }
 });
 
+promoText.addEventListener("input", () => {
+  promoCount.textContent = promoText.value.length;
+});
+
 form.addEventListener("submit", (event) => {
-  if (!input.files.length) {
+  let message = "";
+  if (!input.files.length) message = "Сначала выберите фото товара.";
+  else if (!promoText.value.trim()) message = "Введите текст акции.";
+  else if (!form.querySelector('input[name="formats"]:checked')) message = "Выберите хотя бы один формат.";
+  if (message) {
     event.preventDefault();
-    showError("Сначала выберите фото товара.");
+    showError(message);
     return;
   }
   submitButton.disabled = true;
@@ -77,5 +87,5 @@ form.addEventListener("submit", (event) => {
 // с заблокированной кнопкой — возвращаем кнопку в рабочее состояние.
 window.addEventListener("pageshow", () => {
   submitButton.disabled = false;
-  submitButton.textContent = "Удалить фон";
+  submitButton.textContent = submitButton.dataset.label;
 });

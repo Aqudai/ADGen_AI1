@@ -35,9 +35,17 @@ class Settings(BaseSettings):
     # на фото товаров. Модель по умолчанию скачивается при сборке Docker-образа.
     rembg_model: str = "isnet-general-use"
 
-    # Генерация фона нейросетью (используется со Спринта 2)
+    # Генерация сцены нейросетью.
+    # IMAGE_PROVIDER: huggingface — нейросеть через Hugging Face; fallback — всегда запасной фон
     image_provider: str = "huggingface"
-    hf_api_token: str = ""
+    # Имя HF_TOKEN выбрано не случайно: его же читает библиотека huggingface_hub
+    hf_token: str = ""
+    # Модель и провайдер (партнёр Hugging Face, который выполняет запрос). FLUX.1-schnell —
+    # диффузионная модель от авторов Stable Diffusion: быстрая и дешёвая (~$0.0014 за картинку).
+    # Другие варианты — в .env.example и docs/ARCHITECTURE.md.
+    hf_provider: str = "nscale"
+    hf_model: str = "black-forest-labs/FLUX.1-schnell"
+    hf_timeout: int = 90  # секунд ждать картинку
 
     @property
     def database_url(self) -> URL:

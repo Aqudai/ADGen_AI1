@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Удаление фона — {{ app_name }}{% endblock %}
+{% block title %}Ваши баннеры — {{ app_name }}{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-  <a href="/create" class="text-sm font-medium text-slate-500 transition hover:text-slate-800">← Загрузить другое фото</a>
-  <h1 class="mt-3 text-3xl font-bold tracking-tight">Удаление фона</h1>
+<section class="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+  <a href="/create" class="text-sm font-medium text-slate-500 transition hover:text-slate-800">← Создать новый баннер</a>
+  <h1 class="mt-3 text-3xl font-bold tracking-tight">Ваши баннеры</h1>
+  {% if generation.promo_text %}
+  <p class="mt-2 text-slate-600">«{{ generation.promo_text }}» · стиль «{{ generation.style_label }}»</p>
+  {% endif %}
 
   <div class="mt-8">
     {% include "partials/generation_status.html" %}

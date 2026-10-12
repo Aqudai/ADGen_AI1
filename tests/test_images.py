@@ -49,6 +49,16 @@ def test_unsupported_format_is_rejected():
         prepare_source_image(io.BytesIO(make_image_bytes(fmt="GIF")))
 
 
+@pytest.mark.filterwarnings("ignore::PIL.Image.DecompressionBombWarning")
+def test_image_bomb_is_rejected_before_decoding():
+    """PNG весом в килобайты, но 12000×12000 пикселей — отклоняем, не раскодируя."""
+    buffer = io.BytesIO()
+    Image.new("1", (12000, 12000)).save(buffer, format="PNG")
+    assert len(buffer.getvalue()) < 100_000
+    with pytest.raises(ImageValidationError, match="слишком большое в пикселях"):
+        prepare_source_image(io.BytesIO(buffer.getvalue()))
+
+
 def test_too_small_image_is_rejected():
     with pytest.raises(ImageValidationError, match="слишком маленькое"):
         prepare_source_image(io.BytesIO(make_image_bytes((150, 900))))

@@ -3,11 +3,11 @@
 {% block title %}Новый баннер — {{ app_name }}{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
+<section class="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
   <h1 class="text-3xl font-bold tracking-tight">Новый баннер</h1>
   <p class="mt-2 text-slate-600">
-    Загрузите фото товара — мы аккуратно удалим фон.
-    Текст акции, стиль и форматы баннера появятся совсем скоро.
+    Загрузите фото товара и напишите текст акции — мы уберём фон, нарисуем сцену
+    и соберём готовые баннеры.
   </p>
 
   {% if error %}
@@ -16,41 +16,111 @@
   </div>
   {% endif %}
 
-  <form id="upload-form" action="/generations" method="post" enctype="multipart/form-data" class="mt-6">
-    {# Вся зона — это <label> для скрытого поля выбора файла: клик открывает выбор файла #}
-    <label id="dropzone" for="photo" data-max-mb="{{ max_upload_mb }}"
-           class="flex aspect-4/3 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-white p-4 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40 sm:aspect-video">
-      <div id="dropzone-placeholder" class="flex flex-col items-center">
-        <span class="grid size-12 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-6" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-          </svg>
-        </span>
-        <p class="mt-4 font-semibold">Перетащите фото сюда</p>
-        <p class="text-sm text-slate-500">или нажмите, чтобы выбрать файл</p>
-        <p class="mt-3 text-xs text-slate-400">JPG, PNG или WebP, до {{ max_upload_mb }} МБ</p>
+  <form id="upload-form" action="/generations" method="post" enctype="multipart/form-data" class="mt-8 space-y-8">
+
+    {# 1. Фото товара #}
+    <fieldset>
+      <legend class="font-semibold">1. Фото товара</legend>
+      {# Вся зона — это <label> для скрытого поля выбора файла: клик открывает выбор файла #}
+      <label id="dropzone" for="photo" data-max-mb="{{ max_upload_mb }}"
+             class="mt-3 flex aspect-4/3 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-white p-4 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40 sm:aspect-video">
+        <div id="dropzone-placeholder" class="flex flex-col items-center">
+          <span class="grid size-12 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-6" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+          </span>
+          <p class="mt-4 font-semibold">Перетащите фото сюда</p>
+          <p class="text-sm text-slate-500">или нажмите, чтобы выбрать файл</p>
+          <p class="mt-3 text-xs text-slate-400">JPG, PNG или WebP, до {{ max_upload_mb }} МБ</p>
+        </div>
+        <img id="preview" alt="Выбранное фото" class="hidden max-h-full max-w-full rounded-xl object-contain">
+      </label>
+      <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only">
+      <p id="file-name" class="mt-2 min-h-5 truncate text-sm text-slate-500"></p>
+      <p class="text-xs text-slate-400">
+        Лучше всего: товар целиком в кадре, контрастный фон, хорошее освещение.
+      </p>
+    </fieldset>
+
+    {# 2. Текст акции #}
+    <fieldset>
+      <legend class="font-semibold">2. Текст акции</legend>
+      <textarea id="promo-text" name="promo_text" rows="2" maxlength="{{ max_promo_length }}" required
+                placeholder="Например: Скидка 20% на капучино до пятницы"
+                class="mt-3 block w-full resize-none rounded-xl border-0 bg-white px-4 py-3 text-base shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none">{{ form.promo_text }}</textarea>
+      <div class="mt-2 flex justify-between gap-4 text-xs text-slate-400">
+        <span>Скидку в процентах вынесем в яркий бейдж.</span>
+        <span><span id="promo-count">{{ form.promo_text|length }}</span>/{{ max_promo_length }}</span>
       </div>
-      <img id="preview" alt="Выбранное фото" class="hidden max-h-full max-w-full rounded-xl object-contain">
-    </label>
-    <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only">
+    </fieldset>
 
-    <p id="file-name" class="mt-2 min-h-5 truncate text-sm text-slate-500"></p>
-    <p id="client-error" role="alert" class="hidden text-sm text-rose-600"></p>
+    {# 3. Стиль фона: радиокнопки в виде карточек с мини-превью #}
+    <fieldset>
+      <legend class="font-semibold">3. Стиль фона</legend>
+      <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        {% set previews = {
+          "cozy": "bg-linear-to-b from-[#2B1A12] via-[#7A4A2A] to-[#9A6638]",
+          "festive": "bg-linear-to-br from-[#3A0A2E] via-[#9B1440] to-[#E11D74]",
+          "minimal": "bg-linear-to-b from-[#F5F0EA] to-[#D2C3B1]",
+        } %}
+        {% for style in styles %}
+        <label class="cursor-pointer">
+          <input type="radio" name="style" value="{{ style.key }}" class="peer sr-only"
+                 {% if form.style == style.key %}checked{% endif %}>
+          <span class="block rounded-2xl bg-white p-3 ring-1 ring-slate-200 transition peer-checked:ring-2 peer-checked:ring-indigo-500 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 hover:ring-slate-300">
+            <span class="block h-16 rounded-xl {{ previews[style.key] }}"></span>
+            <span class="mt-3 block font-semibold">{{ style.label }}</span>
+            <span class="block text-sm text-slate-500">{{ style.description }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
 
-    <button id="submit-btn" type="submit"
-            class="mt-4 w-full rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60">
-      Удалить фон
-    </button>
+    {# 4. Форматы #}
+    <fieldset>
+      <legend class="font-semibold">4. Форматы</legend>
+      <div id="formats" class="mt-3 grid gap-3 sm:grid-cols-3">
+        {% set icons = {"post": "h-7 w-7", "story": "h-9 w-5", "2gis": "h-5 w-9"} %}
+        {% for fmt in formats %}
+        <label class="cursor-pointer">
+          <input type="checkbox" name="formats" value="{{ fmt.key }}" class="peer sr-only"
+                 {% if fmt.key in form.formats %}checked{% endif %}>
+          <span class="flex items-center gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 transition peer-checked:ring-2 peer-checked:ring-indigo-500 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 hover:ring-slate-300">
+            <span class="grid size-10 shrink-0 place-items-center">
+              <span class="{{ icons[fmt.key] }} rounded-md border-2 border-indigo-400 bg-indigo-50"></span>
+            </span>
+            <span>
+              <span class="block font-semibold">{{ fmt.label }}</span>
+              <span class="block text-sm text-slate-500">{{ fmt.width }}×{{ fmt.height }}</span>
+            </span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="mt-2 text-xs text-slate-400">
+        Для каждого формата сделаем два варианта оформления. Фото для 2GIS — без текста:
+        2GIS запрещает текст на изображении, текст акции вводится в карточке отдельно.
+      </p>
+    </fieldset>
+
+    {# 5. Логотип #}
+    <fieldset>
+      <legend class="font-semibold">5. Логотип <span class="font-normal text-slate-400">— необязательно</span></legend>
+      <input id="logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"
+             class="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+      <p class="mt-2 text-xs text-slate-400">PNG с прозрачным фоном выглядит лучше всего. До {{ max_logo_mb }} МБ.</p>
+    </fieldset>
+
+    <div>
+      <p id="client-error" role="alert" class="mb-3 hidden text-sm text-rose-600"></p>
+      <button id="submit-btn" type="submit" data-label="Сгенерировать баннеры"
+              class="w-full rounded-xl bg-indigo-600 px-5 py-3.5 font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60">
+        Сгенерировать баннеры
+      </button>
+    </div>
   </form>
-
-  <div class="mt-8 rounded-2xl bg-white p-5 text-sm text-slate-600 ring-1 ring-slate-200">
-    <p class="font-semibold text-slate-900">Как получить лучший результат</p>
-    <ul class="mt-2 list-disc space-y-1 pl-5">
-      <li>Товар целиком в кадре и не обрезан краями фото.</li>
-      <li>Фон контрастный товару: светлый товар — на тёмном, тёмный — на светлом.</li>
-      <li>Хорошее освещение без резких теней.</li>
-    </ul>
-  </div>
 </section>
 {% endblock %}
 
