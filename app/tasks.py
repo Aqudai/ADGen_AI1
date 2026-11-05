@@ -7,12 +7,14 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import Banner, Generation, GenerationStatus, GenerationStep
+from app.models import Banner, Generation, GenerationStatus, GenerationStep, SceneSource
 from app.services import storage
 from app.services.background import remove_background
 from app.services.banner import render_banner
+from app.services.design import interpret
 from app.services.presets import FORMATS, STYLES
-from app.services.scene import generate_scene
+from app.services.scene import ai_scene_enabled, generate_ai_scene
+from app.services.templates import Content, render_template
 from app.services.text import name_logo
 from app.worker import celery_app
 
@@ -31,11 +33,10 @@ def set_step(db: Session, generation: Generation, step: GenerationStep) -> None:
     db.commit()
 
 
-# Ограничение времени задачи: удаление фона и сборка — секунды, нейросеть — до HF_TIMEOUT (90 с).
-# Если что-то зависнет дольше, Celery прервёт ожидание, и сцена будет нарисована без нейросети.
+# Ограничение времени задачи: удаление фона и сборка — секунды, нейросеть — до HF_TIMEOUT (90 с)
 @celery_app.task(soft_time_limit=180)
 def process_generation(generation_id: str) -> None:
-    """Полный пайплайн: удаление фона → сцена → баннеры всех выбранных форматов."""
+    """Пайплайн: удаление фона → (сцена нейросетью, если подключена) → баннеры по вариантам."""
     with SessionLocal() as db:
         generation = db.get(Generation, uuid.UUID(generation_id))
         if generation is None:
@@ -44,49 +45,73 @@ def process_generation(generation_id: str) -> None:
 
         generation.status = GenerationStatus.PROCESSING
         try:
-            # 1. Удаляем фон с фото товара
+            # 1. Удаляем фон с фото товара (нужен шаблонам, где товар стоит на своём фоне)
             set_step(db, generation, GenerationStep.CUTOUT)
             with Image.open(storage.media_path(generation.source_path)) as source:
-                cutout = remove_background(source)
+                photo = source.convert("RGB")
+            cutout = remove_background(photo)
             generation.cutout_path = storage.generation_file(generation.id, "cutout.png")
             storage.save_image(cutout, generation.cutout_path, format="PNG")
 
-            # 2. Сцена: одна на все форматы — экономим бесплатные кредиты нейросети
-            set_step(db, generation, GenerationStep.SCENE)
-            seed = generation.id.int % 2**31  # один и тот же фон при повторной обработке
-            scene = generate_scene(generation.style, seed)
-            generation.scene_path = storage.generation_file(generation.id, "scene.jpg")
-            storage.save_image(scene.image, generation.scene_path, format="JPEG", quality=92)
-            generation.scene_source = scene.source
-            generation.scene_note = scene.note
+            # 2. Понимаем пожелание к дизайну → 3–4 дизайн-задания
+            brand = None
+            if generation.primary_color and generation.secondary_color:
+                brand = (generation.primary_color, generation.secondary_color)
+            design = interpret(generation.design_request or "", generation.promo_text, brand)
+            generation.design = design.to_dict()
 
-            # 3. Баннеры: каждый выбранный формат × каждый вариант оформления
+            # 3. Сцена от нейросети — необязательный дополнительный вариант
+            scene = None
+            if ai_scene_enabled():
+                set_step(db, generation, GenerationStep.SCENE)
+                scene, generation.scene_note = generate_ai_scene(design.scene_style)
+                if scene is not None:
+                    generation.scene_path = storage.generation_file(generation.id, "scene.jpg")
+                    storage.save_image(scene, generation.scene_path, format="JPEG", quality=92)
+                    generation.scene_source = SceneSource.AI
+
+            # 4. Баннеры: каждый вариант дизайна × каждый выбранный формат
             set_step(db, generation, GenerationStep.COMPOSE)
-            style = STYLES[generation.style]
             logo = None
             if generation.logo_path:
                 logo = Image.open(storage.media_path(generation.logo_path)).convert("RGBA")
-            elif generation.brand_name:
-                # Логотипа нет, но есть название — рисуем плашку с названием бизнеса
-                logo = name_logo(generation.brand_name, generation.primary_color or style.accent)
-            for format_key in generation.formats:
-                for variant in FORMATS[format_key].variants:
+            for number, spec in enumerate(design.variants, start=1):
+                content = Content(
+                    photo=photo,
+                    cutout=cutout,
+                    promo_text=generation.promo_text,
+                    primary=spec.primary,
+                    secondary=spec.secondary,
+                    brand_name=generation.brand_name,
+                    logo=logo,
+                    font=spec.font,
+                )
+                variant = f"{spec.template}-{number}"
+                for format_key in generation.formats:
+                    fmt = FORMATS[format_key]
+                    image = render_template(
+                        spec.template, content, fmt.size, clean=format_key == "2gis"
+                    )
+                    add_banner(generation, image, format_key, variant)
+
+            if scene is not None:
+                primary, secondary = design.variants[0].primary, design.variants[0].secondary
+                if logo is None and generation.brand_name:
+                    logo = name_logo(generation.brand_name, primary)
+                for format_key in generation.formats:
+                    fmt = FORMATS[format_key]
                     image = render_banner(
-                        scene.image,
+                        scene,
                         cutout,
                         generation.promo_text,
-                        style,
-                        FORMATS[format_key],
-                        variant,
+                        STYLES[design.scene_style],
+                        fmt,
+                        "clean" if format_key == "2gis" else "overlay",
                         logo=logo,
-                        accent=generation.primary_color,
-                        badge_color=generation.secondary_color,
+                        accent=primary,
+                        badge_color=secondary,
                     )
-                    path = storage.generation_file(generation.id, f"{format_key}-{variant}.jpg")
-                    storage.save_image(image, path, format="JPEG", quality=92)
-                    generation.banners.append(
-                        Banner(format=format_key, variant=variant, image_path=path)
-                    )
+                    add_banner(generation, image, format_key, "ai")
 
             generation.status = GenerationStatus.DONE
         except Exception:
@@ -97,3 +122,9 @@ def process_generation(generation_id: str) -> None:
             generation.error_message = "Не удалось создать баннеры. Попробуйте другое фото."
         generation.step = None
         db.commit()
+
+
+def add_banner(generation: Generation, image: Image.Image, format_key: str, variant: str) -> None:
+    path = storage.generation_file(generation.id, f"{variant}-{format_key}.jpg")
+    storage.save_image(image, path, format="JPEG", quality=92)
+    generation.banners.append(Banner(format=format_key, variant=variant, image_path=path))

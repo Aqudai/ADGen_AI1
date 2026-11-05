@@ -1,4 +1,4 @@
-"""Сцена: запасной фон и вызов нейросети через Hugging Face.
+"""Необязательная сцена от нейросети через Hugging Face.
 
 Hugging Face в тестах не вызываем. Вместо него — локальный HTTP-сервер, который
 отвечает как сервис генерации (картинкой или ошибкой). Если вместо имени модели
@@ -15,10 +15,7 @@ import pytest
 from PIL import Image
 
 from app.config import settings
-from app.models import SceneSource
 from app.services import huggingface, scene
-from app.services.fallback_scene import SCENE_SIZE, draw_fallback_scene
-from app.services.presets import STYLES
 
 
 class FakeGenerator(BaseHTTPRequestHandler):
@@ -55,32 +52,19 @@ def fake_hf(monkeypatch):
     server.shutdown()
 
 
-@pytest.mark.parametrize("style", list(STYLES))
-def test_fallback_scene_is_square_and_repeatable(style):
-    first = draw_fallback_scene(style, seed=7)
-    assert first.size == (SCENE_SIZE, SCENE_SIZE)
-    assert first.tobytes() == draw_fallback_scene(style, seed=7).tobytes()  # один seed — один фон
-
-
-def test_without_token_scene_is_drawn_without_ai(monkeypatch):
+def test_ai_scene_needs_token(monkeypatch):
     monkeypatch.setattr(settings, "hf_token", "")
-    result = scene.generate_scene("cozy", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert "HF_TOKEN" in result.note
-
-
-def test_fallback_provider_skips_ai(monkeypatch, fake_hf):
-    monkeypatch.setattr(settings, "image_provider", "fallback")
-    result = scene.generate_scene("minimal", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert result.note is None  # выбрано сознательно — предупреждать не о чем
+    assert not scene.ai_scene_enabled()
+    monkeypatch.setattr(settings, "hf_token", "hf_test")
+    assert scene.ai_scene_enabled()
+    monkeypatch.setattr(settings, "image_provider", "none")
+    assert not scene.ai_scene_enabled()
 
 
 def test_ai_scene(fake_hf):
-    result = scene.generate_scene("festive", seed=1)
-    assert result.source == SceneSource.AI
-    assert result.note is None
-    assert result.image.mode == "RGB"
+    image, note = scene.generate_ai_scene("festive")
+    assert note is None
+    assert image.mode == "RGB"
 
 
 @pytest.mark.parametrize(
@@ -95,17 +79,17 @@ def test_ai_scene(fake_hf):
 )
 def test_ai_errors_fall_back_with_reason(fake_hf, status, expected):
     fake_hf.status = status
-    result = scene.generate_scene("cozy", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert expected in result.note
+    image, note = scene.generate_ai_scene("cozy")
+    assert image is None
+    assert expected in note
 
 
 def test_ai_timeout_falls_back(fake_hf, monkeypatch):
     fake_hf.delay = 2
     monkeypatch.setattr(settings, "hf_timeout", 0.5)
-    result = scene.generate_scene("cozy", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert "не ответила вовремя" in result.note
+    image, note = scene.generate_ai_scene("cozy")
+    assert image is None
+    assert "не ответила вовремя" in note
 
 
 def test_not_an_image_response_falls_back(fake_hf, monkeypatch):
@@ -119,9 +103,9 @@ def test_not_an_image_response_falls_back(fake_hf, monkeypatch):
         self.wfile.write(b"<html/>!!")
 
     monkeypatch.setattr(FakeGenerator, "do_POST", broken_png)
-    result = scene.generate_scene("cozy", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert "не картинку" in result.note
+    image, note = scene.generate_ai_scene("cozy")
+    assert image is None
+    assert "не картинку" in note
 
 
 def test_unexpected_library_error_falls_back(monkeypatch):
@@ -139,9 +123,9 @@ def test_unexpected_library_error_falls_back(monkeypatch):
 
     monkeypatch.setattr(settings, "hf_token", "hf_test")
     monkeypatch.setattr(huggingface, "InferenceClient", BrokenClient)
-    result = scene.generate_scene("cozy", seed=1)
-    assert result.source == SceneSource.FALLBACK
-    assert result.note == "нейросеть недоступна"
+    image, note = scene.generate_ai_scene("cozy")
+    assert image is None
+    assert note == "нейросеть недоступна"
 
 
 def test_no_connection_falls_back(monkeypatch):

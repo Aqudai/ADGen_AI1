@@ -12,8 +12,9 @@ from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.services.presets import DEFAULT_PRIMARY, DEFAULT_SECONDARY, FORMATS, STYLES, VARIANTS
+from app.services.presets import DEFAULT_PRIMARY, DEFAULT_SECONDARY, FORMATS, VARIANTS
 from app.services.storage import media_url
+from app.services.templates import TEMPLATES
 
 
 class User(Base):
@@ -67,7 +68,7 @@ class GenerationStep(StrEnum):
 
 class SceneSource(StrEnum):
     AI = "ai"  # нарисовала нейросеть
-    FALLBACK = "fallback"  # запасной фон, нарисованный программно
+    FALLBACK = "fallback"  # запасной фон (только у генераций Спринта 2)
 
 
 class Generation(Base):
@@ -88,8 +89,11 @@ class Generation(Base):
 
     # Что заказал пользователь. Пустые только у генераций Спринта 1 (там было лишь удаление фона).
     promo_text: Mapped[str | None] = mapped_column(Text)
-    style: Mapped[str | None] = mapped_column(String(20))
+    style: Mapped[str | None] = mapped_column(String(20))  # только у генераций Спринтов 2–3
     formats: Mapped[list[str] | None] = mapped_column(JSON)
+    # Пожелание пользователя («уютно, по-осеннему») и как мы его поняли (design.interpret)
+    design_request: Mapped[str | None] = mapped_column(Text)
+    design: Mapped[dict | None] = mapped_column(JSON)
     # Снимок профиля бренда на момент генерации: если профиль потом поменяют,
     # старые баннеры в истории останутся такими, какими были сделаны
     brand_name: Mapped[str | None] = mapped_column(String(80))
@@ -129,16 +133,15 @@ class Generation(Base):
         """Картинка для списка истории: первый баннер, иначе исходное фото."""
         return self.banners[0].image_url if self.banners else self.source_url
 
-    @property
-    def style_label(self) -> str | None:
-        return STYLES[self.style].label if self.style in STYLES else None
-
-    def banners_by_format(self) -> list[tuple[str, list["Banner"]]]:
-        """Баннеры по форматам в порядке выбора: [("Пост 1080×1080", [...]), ...]."""
+    def banners_by_variant(self) -> list[tuple[str, list["Banner"]]]:
+        """Баннеры по вариантам дизайна: [("Вариант 1 · Яркий", [пост, сторис, 2GIS]), ...]."""
         groups: dict[str, list[Banner]] = {}
         for banner in self.banners:
-            groups.setdefault(banner.format, []).append(banner)
-        return [(FORMATS[key].title, items) for key, items in groups.items()]
+            groups.setdefault(banner.variant, []).append(banner)
+        return [
+            (f"Вариант {i} · {items[0].variant_label}", items)
+            for i, items in enumerate(groups.values(), start=1)
+        ]
 
 
 class Banner(Base):
@@ -162,7 +165,13 @@ class Banner(Base):
 
     @property
     def variant_label(self) -> str:
-        return VARIANTS.get(self.variant, self.variant)
+        # Новые варианты называются по шаблону: «pop-1» → «Яркий»
+        template = TEMPLATES.get(self.variant.split("-")[0])
+        return template.label if template else VARIANTS.get(self.variant, self.variant)
+
+    @property
+    def format_title(self) -> str:
+        return FORMATS[self.format].title
 
     @property
     def download_name(self) -> str:

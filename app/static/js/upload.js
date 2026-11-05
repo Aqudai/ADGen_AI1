@@ -65,6 +65,15 @@ dropzone.addEventListener("drop", (event) => {
   }
 });
 
+// Подсказки к пожеланию: клик — текст подставляется в поле
+const designRequest = document.getElementById("design-request");
+document.querySelectorAll(".design-example").forEach((button) =>
+  button.addEventListener("click", () => {
+    designRequest.value = button.dataset.example;
+    designRequest.focus();
+  }),
+);
+
 promoText.addEventListener("input", () => {
   promoCount.textContent = promoText.value.length;
 });

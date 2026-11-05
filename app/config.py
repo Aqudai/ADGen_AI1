@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     rembg_model: str = "isnet-general-use"
 
     # Генерация сцены нейросетью.
-    # IMAGE_PROVIDER: huggingface — нейросеть через Hugging Face; fallback — всегда запасной фон
+    # IMAGE_PROVIDER: huggingface — сцена от нейросети (если есть HF_TOKEN); none — выключить
     image_provider: str = "huggingface"
     # Имя HF_TOKEN выбрано не случайно: его же читает библиотека huggingface_hub
     hf_token: str = ""

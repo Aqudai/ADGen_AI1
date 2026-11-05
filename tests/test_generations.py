@@ -41,8 +41,8 @@ def client(user_client):
 
 @pytest.fixture(autouse=True)
 def no_ai(monkeypatch):
-    """В тестах пайплайна сцену рисуем без нейросети (вызов HF проверяется в test_scene.py)."""
-    monkeypatch.setattr(settings, "image_provider", "fallback")
+    """В тестах пайплайна нейросеть для сцены выключена (её вызов проверяется в test_scene.py)."""
+    monkeypatch.setattr(settings, "image_provider", "none")
 
 
 def fake_remove_background(image: Image.Image) -> Image.Image:
@@ -53,7 +53,7 @@ def fake_remove_background(image: Image.Image) -> Image.Image:
 
 
 def submit(client, photo=None, **fields):
-    data = {"promo_text": PROMO, "style": "cozy", "formats": ["post", "2gis"]} | fields
+    data = {"promo_text": PROMO, "design_request": "", "formats": ["post", "2gis"]} | fields
     files = {}
     if photo is not False:
         files["photo"] = ("photo.jpg", photo or make_image_bytes(), "image/jpeg")
@@ -82,7 +82,8 @@ def test_create_page(client):
     assert response.status_code == 200
     assert 'enctype="multipart/form-data"' in response.text
     assert 'name="promo_text"' in response.text
-    assert response.text.count('name="style"') == 3
+    assert 'name="design_request"' in response.text
+    assert "Ярко и дерзко" in response.text  # подсказки к пожеланию
     assert response.text.count('name="formats"') == 3
 
 
@@ -94,7 +95,7 @@ def test_submit_saves_generation_and_queues_task(client, session_factory, media_
     assert fake_queue.calls == [(str(generation.id),)]
     assert generation.status == GenerationStatus.PENDING
     assert generation.promo_text == PROMO
-    assert generation.style == "cozy"
+    assert generation.design_request is None
     assert generation.formats == ["post", "2gis"]
     assert (media_dir / generation.source_path).exists()
     assert generation.logo_path is None
@@ -105,7 +106,7 @@ def test_submit_saves_generation_and_queues_task(client, session_factory, media_
     [
         ({"promo_text": "   "}, "Введите текст акции"),
         ({"promo_text": "А" * 121}, "длиннее 120 символов"),
-        ({"style": "neon"}, "Выберите стиль фона"),
+        ({"design_request": "я" * 201}, "длиннее 200 символов"),
         ({"formats": []}, "хотя бы один формат"),
         ({"formats": ["post", "billboard"]}, "Неизвестный формат"),
         ({"photo": False}, "Выберите фото"),
@@ -120,8 +121,9 @@ def test_form_errors(client, fake_queue, fields, message):
 
 
 def test_form_keeps_entered_text_after_error(client):
-    response = submit(client, style="neon", promo_text="Мой текст акции")
+    response = submit(client, formats=[], promo_text="Мой текст акции", design_request="уютно")
     assert "Мой текст акции" in response.text
+    assert "уютно" in response.text
 
 
 def test_photo_too_large(client, monkeypatch):
@@ -133,20 +135,22 @@ def test_photo_too_large(client, monkeypatch):
 
 def test_pipeline_creates_banners(client, monkeypatch, session_factory, media_dir):
     generation = run_pipeline(
-        client, monkeypatch, session_factory, formats=["post", "story", "2gis"]
+        client,
+        monkeypatch,
+        session_factory,
+        formats=["post", "story", "2gis"],
+        design_request="Премиум, шрифт с засечками",
     )
 
     assert generation.status == GenerationStatus.DONE
     assert generation.step is None
-    assert generation.scene_source == SceneSource.FALLBACK
-    # пост и сторис — по 2 варианта, 2GIS — 1 (без текста)
-    assert [(b.format, b.variant) for b in generation.banners] == [
-        ("post", "overlay"),
-        ("post", "panel"),
-        ("story", "overlay"),
-        ("story", "panel"),
-        ("2gis", "clean"),
-    ]
+    assert generation.scene_source is None  # нейросеть не подключена — сцены нет
+    assert generation.design["mood"] == "premium"
+    assert generation.design["font"] == "serif"
+    # 4 варианта дизайна × 3 формата
+    assert len(generation.banners) == 12
+    variants = list(dict.fromkeys(b.variant for b in generation.banners))
+    assert variants[0] == "luxe-1" and len(variants) == 4
     for banner in generation.banners:
         image = Image.open(media_dir / banner.image_path)
         assert (
@@ -154,7 +158,7 @@ def test_pipeline_creates_banners(client, monkeypatch, session_factory, media_di
             == {"post": (1080, 1080), "story": (1080, 1920), "2gis": (1200, 624)}[banner.format]
         )
     assert (media_dir / generation.cutout_path).exists()
-    assert (media_dir / generation.scene_path).exists()
+    assert generation.scene_path is None
 
 
 def test_pipeline_uses_brand_profile(client, monkeypatch, session_factory, media_dir):
@@ -214,7 +218,7 @@ def test_status_partial_shows_current_step(client, session_factory):
     response = client.get(f"/generations/{generation.id}/status")
 
     assert 'hx-trigger="every 1s"' in response.text  # опрос продолжается
-    assert "Рисуем сцену" in response.text
+    assert "Собираем варианты дизайна" in response.text
 
 
 def test_status_partial_shows_gallery_when_done(client, monkeypatch, session_factory):
@@ -224,20 +228,38 @@ def test_status_partial_shows_gallery_when_done(client, monkeypatch, session_fac
 
     assert "hx-trigger" not in response.text  # опрос прекращается
     assert "Скачать все баннеры" in response.text
-    assert 'download="adgen-post-overlay.jpg"' in response.text
-    assert 'download="adgen-2gis-clean.jpg"' in response.text
-    assert "Фото для блока «Скидки»" in response.text
+    assert "Вариант 1 ·" in response.text
+    assert "Как мы поняли пожелание" in response.text
+    assert response.text.count('download="adgen-post-') == 4
+    assert "для блока «Скидки»" in response.text
 
 
-def test_scene_note_is_shown(client, monkeypatch, session_factory):
+def test_ai_scene_variant_added_when_enabled(client, monkeypatch, session_factory):
+    """С ключом Hugging Face добавляется пятый вариант — товар на сцене от нейросети."""
+    from app import tasks
+
     monkeypatch.setattr(settings, "image_provider", "huggingface")
-    monkeypatch.setattr(settings, "hf_token", "")
-    generation = run_pipeline(client, monkeypatch, session_factory)
+    monkeypatch.setattr(settings, "hf_token", "hf_test")
+    monkeypatch.setattr(
+        tasks, "generate_ai_scene", lambda style: (Image.new("RGB", (64, 64), "tan"), None)
+    )
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    assert [b.variant for b in generation.banners][-1] == "ai"
+    assert len(generation.banners) == 5
+    assert generation.scene_source == SceneSource.AI
 
-    response = client.get(f"/generations/{generation.id}")
 
-    assert "Фон нарисован без нейросети" in response.text
-    assert "HF_TOKEN" in response.text
+def test_ai_scene_failure_is_explained(client, monkeypatch, session_factory):
+    from app import tasks
+
+    monkeypatch.setattr(settings, "image_provider", "huggingface")
+    monkeypatch.setattr(settings, "hf_token", "hf_test")
+    monkeypatch.setattr(tasks, "generate_ai_scene", lambda style: (None, "закончились кредиты"))
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+
+    assert len(generation.banners) == 4  # основные варианты на месте
+    page = client.get(f"/generations/{generation.id}").text
+    assert "Вариант со сценой от нейросети пропущен: закончились кредиты" in page
 
 
 def test_zip_contains_all_banners(client, monkeypatch, session_factory):
@@ -248,7 +270,8 @@ def test_zip_contains_all_banners(client, monkeypatch, session_factory):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
     names = zipfile.ZipFile(io.BytesIO(response.content)).namelist()
-    assert names == ["adgen-post-overlay.jpg", "adgen-post-panel.jpg", "adgen-2gis-clean.jpg"]
+    assert len(names) == 8  # 4 варианта × (пост + 2GIS)
+    assert all(name.startswith("adgen-") and name.endswith(".jpg") for name in names)
 
 
 def test_zip_not_ready(client, session_factory):
@@ -263,8 +286,8 @@ def test_api_returns_banners(client, monkeypatch, session_factory):
 
     assert data["status"] == "done"
     assert data["formats"] == ["post", "2gis"]
-    assert data["scene_source"] == "fallback"
-    assert [b["format"] for b in data["banners"]] == ["post", "post", "2gis"]
+    assert data["scene_source"] is None
+    assert [b["format"] for b in data["banners"]][:2] == ["post", "2gis"]
 
 
 def test_sprint1_generation_without_banners_still_renders(client, session_factory):
@@ -287,7 +310,10 @@ def test_sprint1_generation_without_banners_still_renders(client, session_factor
 
 
 def test_banner_model_labels():
+    assert Banner(format="post", variant="pop-1", image_path="x").variant_label == "Яркий"
+    assert Banner(format="post", variant="ai", image_path="x").variant_label == "Сцена от нейросети"
     banner = Banner(format="2gis", variant="clean", image_path="generations/x/2gis-clean.jpg")
+    assert banner.variant_label == "Без текста, для блока «Скидки»"  # старая генерация
     assert banner.image_url == "/media/generations/x/2gis-clean.jpg"
     assert banner.download_name == "adgen-2gis-clean.jpg"
     assert banner.aspect_ratio == "1200 / 624"

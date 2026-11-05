@@ -9,7 +9,10 @@
 - «Фото» (photo)       — исходное фото на весь кадр, текст на затемнении снизу;
 - «Премиум» (luxe)     — тёмный фон, луч света, отражение товара, золото и антиква;
 - «Минимализм» (arch)  — светлый фон, арка фирменного цвета, строгая типографика;
-- «Журнал» (split)     — кадр делится на цветной блок с текстом и фото.
+- «Журнал» (split)     — кадр делится на цветной блок с текстом и фото;
+- «Узор» (pattern)     — геометрический орнамент и светлая карточка, как открытка;
+- «Классика» (editorial) — бумажный фон, антиква, фото в рамке;
+- «Плакат» (poster)    — огромный узкий заголовок и полоса фото, как афиша.
 
 Для 2GIS (вариант clean) каждый шаблон рисует только изображение — без текста и логотипов,
 как требует 2GIS.
@@ -47,6 +50,13 @@ class Content:
     secondary: str
     brand_name: str | None = None
     logo: Image.Image | None = None
+    font: str | None = None  # шрифт заголовка из запроса: serif / condensed / rounded
+
+    def face(self, default: Face) -> Face:
+        """Шрифт заголовка: заказанный в запросе, иначе — шрифт шаблона."""
+        return {"serif": PLAYFAIR, "condensed": OSWALD_MEDIUM, "rounded": UNBOUNDED_BOLD}.get(
+            self.font, default
+        )
 
     @property
     def discount(self) -> str | None:
@@ -168,7 +178,7 @@ def render_pop(c: Content, size, clean=False) -> Image.Image:
 
     product_box = {
         "square": (0.40, 0.24, 0.96, 0.95),
-        "tall": (0.08, 0.40, 0.92, 0.84),
+        "tall": (0.08, 0.40, 0.92, 0.78),
         "wide": (0.25, 0.08, 0.75, 0.94),
     }[shape]
     product, pos = fit_product(c.cutout, px(product_box, size))
@@ -188,14 +198,14 @@ def render_pop(c: Content, size, clean=False) -> Image.Image:
         discount_box, headline_box, mark_box = (
             (0.08, 0.13, 0.92, 0.24),
             (0.08, 0.25, 0.92, 0.38),
-            (0.08, 0.80, 0.50, 0.855),
+            (0.08, 0.815, 0.50, 0.865),
         )
     headline = c.headline.upper()
     if c.discount:
         text_in_box(canvas, c.discount, px(discount_box, size), UNBOUNDED_BLACK, ink, 280, 60)
     else:
         headline_box = (discount_box[0], discount_box[1], headline_box[2], headline_box[3])
-    text_in_box(canvas, headline, px(headline_box, size), UNBOUNDED_BOLD, ink, 70, 24)
+    text_in_box(canvas, headline, px(headline_box, size), c.face(UNBOUNDED_BOLD), ink, 70, 24)
     brand_mark(canvas, c, px(mark_box, size), ink)
     return canvas.convert("RGB")
 
@@ -253,7 +263,9 @@ def render_photo(c: Content, size, clean=False) -> Image.Image:
         (box[0], box[1] - int(s * 0.035), box[0] + int(s * 0.12), box[1] - int(s * 0.027)),
         fill=c.secondary,
     )
-    text_in_box(canvas, c.promo_text, box, MONTSERRAT, "#FFFFFF", int(s * 0.1), 26, valign="bottom")
+    text_in_box(
+        canvas, c.promo_text, box, c.face(MONTSERRAT), "#FFFFFF", int(s * 0.1), 26, valign="bottom"
+    )
     return canvas.convert("RGB")
 
 
@@ -393,7 +405,7 @@ def render_arch(c: Content, size, clean=False) -> Image.Image:
         )
     brand_mark(canvas, c, px(mark_box, size), INK)
     bottom_y = text_in_box(
-        canvas, c.headline, px(headline_box, size), MONTSERRAT, INK, int(s * 0.085), 24
+        canvas, c.headline, px(headline_box, size), c.face(MONTSERRAT), INK, int(s * 0.085), 24
     )
 
     if c.discount:
@@ -460,10 +472,242 @@ def render_split(c: Content, size, clean=False) -> Image.Image:
         canvas,
         c.headline.upper(),
         (left, y, right, bottom - mark_h - int(s * 0.03)),
-        OSWALD_MEDIUM,
+        c.face(OSWALD_MEDIUM),
         ink,
         int(s * 0.09),
         22,
+    )
+    return canvas.convert("RGB")
+
+
+def render_pattern(c: Content, size, clean=False) -> Image.Image:
+    """«Узор»: геометрический орнамент из фигур в фирменных цветах и светлая карточка
+    с товаром и текстом в центре — как открытка."""
+    import random
+
+    w, h = size
+    s = min(size)
+    shape = shape_of(size)
+    colors = [c.primary, c.secondary, hex_color(mix(c.primary, "#FFFFFF", 0.45)), CREAM]
+    canvas = Image.new("RGBA", size, c.primary)
+    draw = ImageDraw.Draw(canvas)
+    tile = s // 6
+    rng = random.Random(len(c.promo_text))  # один и тот же текст — один и тот же узор
+    for ty in range(0, h + tile, tile):
+        for tx in range(0, w + tile, tile):
+            bg, fg = rng.sample(colors, 2)
+            box = (tx, ty, tx + tile, ty + tile)
+            draw.rectangle(box, fill=bg)
+            kind = rng.randrange(5)
+            if kind == 0:
+                draw.ellipse(box, fill=fg)
+            elif kind == 1:  # половина круга
+                draw.pieslice((tx, ty, tx + tile, ty + tile * 2 - 1), 180, 360, fill=fg)
+            elif kind == 2:  # четверть круга из угла
+                draw.pieslice((tx - tile, ty - tile, tx + tile, ty + tile), 0, 90, fill=fg)
+            elif kind == 3:
+                draw.polygon([(tx, ty + tile), (tx + tile, ty + tile), (tx + tile, ty)], fill=fg)
+            else:
+                draw.ellipse(
+                    (tx + tile // 4, ty + tile // 4, tx + 3 * tile // 4, ty + 3 * tile // 4),
+                    fill=fg,
+                )
+
+    inset = int(s * (0.07 if shape != "tall" else 0.06))
+    top_inset = inset if shape != "tall" else int(h * 0.12)
+    card = (inset, top_inset, w - inset, h - top_inset)
+    drop_shadow(
+        canvas,
+        Image.new("RGBA", (card[2] - card[0], card[3] - card[1]), (0, 0, 0, 255)),
+        card[:2],
+        (0, int(s * 0.012)),
+        int(s * 0.02),
+        90,
+    )
+    draw.rounded_rectangle(card, radius=int(s * 0.04), fill="#FFFDF8")
+    cw, ch = card[2] - card[0], card[3] - card[1]
+
+    def in_card(rel):
+        return (
+            int(card[0] + rel[0] * cw),
+            int(card[1] + rel[1] * ch),
+            int(card[0] + rel[2] * cw),
+            int(card[1] + rel[3] * ch),
+        )
+
+    product_rel = {
+        "square": (0.15, 0.40, 0.85, 0.93),
+        "tall": (0.1, 0.42, 0.9, 0.9),
+        "wide": (0.25, 0.08, 0.75, 0.92),
+    }[shape]
+    product, pos = fit_product(c.cutout, in_card(product_rel))
+    drop_shadow(canvas, product, pos, (0, int(s * 0.012)), int(s * 0.02), 80)
+    canvas.alpha_composite(product, pos)
+    if clean:
+        return canvas.convert("RGB")
+
+    title_rel = (0.08, 0.07, 0.92, 0.30) if shape == "square" else (0.08, 0.08, 0.92, 0.27)
+    bottom_y = text_in_box(
+        canvas,
+        c.headline,
+        in_card(title_rel),
+        c.face(UNBOUNDED_BOLD),
+        INK,
+        int(s * 0.08),
+        22,
+        "center",
+        "center",
+    )
+    if c.discount:
+        pill_h = int(s * 0.085)
+        fnt, _ = text.fit_text(
+            c.discount, int(s * 0.4), int(pill_h * 0.6), pill_h, 14, UNBOUNDED_BLACK
+        )
+        pill_w = int(text.text_width(c.discount, fnt) + pill_h)
+        x, y = (w - pill_w) // 2, bottom_y + int(s * 0.02)
+        draw.rounded_rectangle((x, y, x + pill_w, y + pill_h), radius=pill_h // 2, fill=c.secondary)
+        draw.text(
+            (x + pill_w / 2, y + pill_h / 2),
+            c.discount,
+            font=fnt,
+            fill=text.readable_text_color(c.secondary),
+            anchor="mm",
+        )
+    brand_mark(
+        canvas,
+        c,
+        in_card((0.06, 0.92, 0.5, 0.97) if shape == "square" else (0.08, 0.93, 0.5, 0.97)),
+        INK,
+    )
+    return canvas.convert("RGB")
+
+
+def render_editorial(c: Content, size, clean=False) -> Image.Image:
+    """«Классика»: бумажный фон, крупный заголовок антиквой, фото в рамке, тонкие линейки —
+    как обложка журнала."""
+    w, h = size
+    s = min(size)
+    shape = shape_of(size)
+    if clean:
+        return compose.cover(c.photo, size)
+    canvas = Image.new("RGBA", size, "#F5F1E8")
+    draw = ImageDraw.Draw(canvas)
+    m = int(w * 0.07)
+    top = int(h * (0.05 if shape == "square" else 0.13))
+    rule = max(2, s // 540)
+
+    # Шапка: название бизнеса слева, тонкая линейка
+    mark_h = int(s * 0.04)
+    brand_mark(canvas, c, (m, top, w // 2, top + mark_h), INK)
+    draw.line(
+        (m, top + mark_h + int(s * 0.02), w - m, top + mark_h + int(s * 0.02)), fill=INK, width=rule
+    )
+
+    head_top = top + mark_h + int(s * 0.05)
+    head_bottom = int(h * (0.47 if shape == "square" else 0.36))
+    y = text_in_box(
+        canvas,
+        c.headline,
+        (m, head_top, w - m, head_bottom),
+        c.face(PLAYFAIR),
+        INK,
+        int(s * 0.11),
+        26,
+    )
+    if c.discount:
+        text_in_box(
+            canvas,
+            c.discount,
+            (m, y + int(s * 0.01), w - m, y + int(s * 0.1)),
+            PLAYFAIR_BOLD,
+            c.secondary if text.luminance(c.secondary) < 150 else c.primary,
+            int(s * 0.08),
+            20,
+        )
+
+    photo_box = (
+        m,
+        int(h * (0.58 if shape == "square" else 0.46)),
+        w - m,
+        int(h * (0.95 if shape == "square" else 0.86)),
+    )
+    photo = compose.cover(c.photo, (photo_box[2] - photo_box[0], photo_box[3] - photo_box[1]))
+    mask = Image.new("L", photo.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, photo.width - 1, photo.height - 1), radius=int(s * 0.025), fill=255
+    )
+    canvas.paste(photo, photo_box[:2], mask)
+    # Цветная «закладка» фирменного цвета у края фото
+    draw.rectangle(
+        (
+            photo_box[0],
+            photo_box[1] - int(s * 0.02),
+            photo_box[0] + int(s * 0.14),
+            photo_box[1] - int(s * 0.012),
+        ),
+        fill=c.primary,
+    )
+    return canvas.convert("RGB")
+
+
+def render_poster(c: Content, size, clean=False) -> Image.Image:
+    """«Плакат»: огромный узкий заголовок на всю ширину, под ним полоса фото, мелкая подпись —
+    как афиша."""
+    w, h = size
+    s = min(size)
+    shape = shape_of(size)
+    if clean:
+        return compose.cover(c.photo, size)
+    paper = "#FAFAF7"
+    canvas = Image.new("RGBA", size, paper)
+    draw = ImageDraw.Draw(canvas)
+    m = int(w * 0.06)
+    head = (
+        m,
+        int(h * (0.05 if shape == "square" else 0.13)),
+        w - m,
+        int(h * (0.40 if shape == "square" else 0.37)),
+    )
+    title = c.promo_text.upper()
+    text_in_box(
+        canvas,
+        title,
+        head,
+        c.face(OSWALD) if c.font != "condensed" else OSWALD,
+        INK,
+        int(s * 0.2),
+        30,
+        valign="bottom",
+    )
+
+    photo_box = (m, head[3] + int(s * 0.03), w - m, int(h * (0.88 if shape == "square" else 0.80)))
+    photo = compose.cover(c.photo, (photo_box[2] - photo_box[0], photo_box[3] - photo_box[1]))
+    canvas.paste(photo, photo_box[:2])
+
+    if c.discount:
+        r = int(s * 0.11)
+        cx, cy = photo_box[2] - r - int(s * 0.03), photo_box[1] + r + int(s * 0.03)
+        draw.rectangle((cx - r, cy - r * 0.62, cx + r, cy + r * 0.62), fill=c.primary)
+        text_in_box(
+            canvas,
+            c.discount,
+            (cx - r + 10, int(cy - r * 0.5), cx + r - 10, int(cy + r * 0.5)),
+            OSWALD,
+            text.readable_text_color(c.primary),
+            int(r * 0.9),
+            14,
+            "center",
+            "center",
+        )
+
+    foot = (m, photo_box[3] + int(s * 0.02), w - m, photo_box[3] + int(s * 0.07))
+    draw.line((foot[0], foot[1], foot[2], foot[1]), fill=INK, width=max(2, s // 540))
+    brand_mark(
+        canvas,
+        c,
+        (foot[0], foot[1] + int(s * 0.012), foot[0] + int(w * 0.45), foot[3]),
+        INK,
+        OSWALD_MEDIUM,
     )
     return canvas.convert("RGB")
 
@@ -484,6 +728,9 @@ TEMPLATES = {
         Template("luxe", "Премиум", "Тёмный фон, золото, отражение", render_luxe),
         Template("arch", "Минимализм", "Светлый фон и арка", render_arch),
         Template("split", "Журнал", "Цветной блок и фото", render_split),
+        Template("pattern", "Узор", "Орнамент и карточка, как открытка", render_pattern),
+        Template("editorial", "Классика", "Антиква, фото в рамке, как журнал", render_editorial),
+        Template("poster", "Плакат", "Огромный узкий заголовок, как афиша", render_poster),
     )
 }
 

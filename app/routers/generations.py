@@ -17,11 +17,21 @@ from app.models import Generation, User
 from app.schemas import BannerRequest, first_error
 from app.services import storage
 from app.services.images import ImageValidationError, prepare_source_image
-from app.services.presets import FORMATS, MAX_PROMO_LENGTH, STYLES
+from app.services.presets import FORMATS, MAX_DESIGN_REQUEST_LENGTH, MAX_PROMO_LENGTH
 from app.tasks import process_generation
 from app.templating import templates
 
 router = APIRouter()
+
+# Подсказки под полем «Каким вы видите баннер?» — по клику подставляются в поле
+DESIGN_EXAMPLES = [
+    "Уютно, по-осеннему, тёплые цвета",
+    "Ярко и дерзко, неон",
+    "Премиум, чёрный с золотом",
+    "Минимализм, светлый, шрифт с засечками",
+    "Праздничный, новогодний",
+    "Свежо, натурально, зелёный",
+]
 
 
 def get_generation_or_404(db: Session, generation_id: uuid.UUID, user: User) -> Generation:
@@ -40,14 +50,15 @@ def render_create_page(
     status_code: int = 200,
 ):
     # По умолчанию: уютный стиль и все форматы. При ошибке — то, что ввёл пользователь.
-    form = form or {"promo_text": "", "style": "cozy", "formats": list(FORMATS)}
+    form = form or {"promo_text": "", "design_request": "", "formats": list(FORMATS)}
     return templates.TemplateResponse(
         request,
         "create.html",
         {
             "error": error,
             "form": form,
-            "styles": STYLES.values(),
+            "design_examples": DESIGN_EXAMPLES,
+            "max_design_request_length": MAX_DESIGN_REQUEST_LENGTH,
             "formats": FORMATS.values(),
             "max_upload_mb": settings.max_upload_mb,
             "brand": user.brand,
@@ -73,17 +84,19 @@ def create_generation(
     user: CurrentUser,
     photo: Annotated[UploadFile | None, File()] = None,
     promo_text: Annotated[str, Form()] = "",
-    style: Annotated[str, Form()] = "",
+    design_request: Annotated[str, Form()] = "",
     formats: Annotated[list[str] | None, Form()] = None,
 ):
     """Принимает форму, сохраняет файлы и ставит генерацию в очередь Celery."""
-    form = {"promo_text": promo_text, "style": style, "formats": formats or []}
+    form = {"promo_text": promo_text, "design_request": design_request, "formats": formats or []}
 
     def error(message: str):
         return render_create_page(request, user, message, form, status_code=400)
 
     try:
-        params = BannerRequest(promo_text=promo_text, style=style, formats=formats or [])
+        params = BannerRequest(
+            promo_text=promo_text, design_request=design_request, formats=formats or []
+        )
     except ValidationError as exc:
         return error(first_error(exc))
 
@@ -101,7 +114,7 @@ def create_generation(
         id=uuid.uuid4(),
         user_id=user.id,
         promo_text=params.promo_text,
-        style=params.style,
+        design_request=params.design_request or None,
         formats=params.formats,
     )
     generation.source_path = storage.generation_file(generation.id, "source.jpg")

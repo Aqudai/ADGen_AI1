@@ -6,14 +6,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
-from app.services.presets import FORMATS, MAX_PROMO_LENGTH, STYLES
+from app.services.presets import FORMATS, MAX_DESIGN_REQUEST_LENGTH, MAX_PROMO_LENGTH
 
 
 class BannerRequest(BaseModel):
     """Параметры баннеров из формы. Сообщения об ошибках — для пользователя, поэтому по-русски."""
 
     promo_text: str
-    style: str
+    design_request: str = ""
     formats: list[str]
 
     @field_validator("promo_text")
@@ -26,11 +26,14 @@ class BannerRequest(BaseModel):
             raise ValueError(f"Текст акции длиннее {MAX_PROMO_LENGTH} символов — сократите его.")
         return value
 
-    @field_validator("style")
+    @field_validator("design_request")
     @classmethod
-    def check_style(cls, value: str) -> str:
-        if value not in STYLES:
-            raise ValueError("Выберите стиль фона.")
+    def check_design_request(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) > MAX_DESIGN_REQUEST_LENGTH:
+            raise ValueError(
+                f"Пожелание к дизайну длиннее {MAX_DESIGN_REQUEST_LENGTH} символов — сократите его."
+            )
         return value
 
     @field_validator("formats")
@@ -121,7 +124,7 @@ class GenerationOut(BaseModel):
     status: str
     step: str | None
     promo_text: str | None
-    style: str | None
+    design_request: str | None
     formats: list[str] | None
     source_url: str
     cutout_url: str | None

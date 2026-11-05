@@ -55,27 +55,23 @@
       </div>
     </fieldset>
 
-    {# 3. Стиль фона: радиокнопки в виде карточек с мини-превью #}
+    {# 3. Пожелание к дизайну — разбирается по ключевым словам (app/services/design.py) #}
     <fieldset>
-      <legend class="font-semibold">3. Стиль фона</legend>
-      <div class="mt-3 grid gap-3 sm:grid-cols-3">
-        {% set previews = {
-          "cozy": "bg-linear-to-b from-[#2B1A12] via-[#7A4A2A] to-[#9A6638]",
-          "festive": "bg-linear-to-br from-[#3A0A2E] via-[#9B1440] to-[#E11D74]",
-          "minimal": "bg-linear-to-b from-[#F5F0EA] to-[#D2C3B1]",
-        } %}
-        {% for style in styles %}
-        <label class="cursor-pointer">
-          <input type="radio" name="style" value="{{ style.key }}" class="peer sr-only"
-                 {% if form.style == style.key %}checked{% endif %}>
-          <span class="block rounded-2xl bg-white p-3 ring-1 ring-slate-200 transition peer-checked:ring-2 peer-checked:ring-indigo-500 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 hover:ring-slate-300">
-            <span class="block h-16 rounded-xl {{ previews[style.key] }}"></span>
-            <span class="mt-3 block font-semibold">{{ style.label }}</span>
-            <span class="block text-sm text-slate-500">{{ style.description }}</span>
-          </span>
-        </label>
+      <legend class="font-semibold">3. Каким вы видите баннер? <span class="font-normal text-slate-400">— необязательно</span></legend>
+      <textarea id="design-request" name="design_request" rows="2" maxlength="{{ max_design_request_length }}"
+                placeholder="Например: уютно, по-осеннему, тёплые цвета, шрифт с засечками"
+                class="mt-3 block w-full resize-none rounded-xl border-0 bg-white px-4 py-3 text-base shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none">{{ form.design_request }}</textarea>
+      <div class="mt-3 flex flex-wrap gap-2">
+        {% for example in design_examples %}
+        <button type="button" data-example="{{ example }}"
+                class="design-example rounded-full bg-white px-3 py-1.5 text-sm text-slate-600 ring-1 ring-slate-200 transition hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-200">
+          {{ example }}
+        </button>
         {% endfor %}
       </div>
+      <p class="mt-2 text-xs text-slate-400">
+        Опишите настроение, цвета и шрифт — сделаем 4 разных варианта. Можно оставить пустым.
+      </p>
     </fieldset>
 
     {# 4. Форматы #}
@@ -100,7 +96,7 @@
         {% endfor %}
       </div>
       <p class="mt-2 text-xs text-slate-400">
-        Для каждого формата сделаем два варианта оформления. Фото для 2GIS — без текста:
+        Каждый вариант дизайна — во всех выбранных форматах. Фото для 2GIS — без текста:
         2GIS запрещает текст на изображении, текст акции вводится в карточке отдельно.
       </p>
     </fieldset>

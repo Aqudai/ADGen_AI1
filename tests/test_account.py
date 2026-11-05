@@ -76,7 +76,7 @@ def test_history_empty_and_with_generation(user_client, monkeypatch):
     monkeypatch.setattr(generations, "process_generation", FakeTask())
     user_client.post(
         "/generations",
-        data={"promo_text": "Скидка на латте", "style": "minimal", "formats": ["post"]},
+        data={"promo_text": "Скидка на латте", "design_request": "минимализм", "formats": ["post"]},
         files={"photo": ("p.jpg", make_image_bytes(), "image/jpeg")},
     )
     history = user_client.get("/history").text

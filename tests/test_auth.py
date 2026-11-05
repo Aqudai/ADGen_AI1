@@ -105,7 +105,7 @@ def test_other_users_generation_is_hidden(client, monkeypatch):
     register(client, email="alice@example.com")
     response = client.post(
         "/generations",
-        data={"promo_text": "Акция", "style": "cozy", "formats": ["post"]},
+        data={"promo_text": "Акция", "design_request": "", "formats": ["post"]},
         files={"photo": ("p.jpg", make_image_bytes(), "image/jpeg")},
         follow_redirects=False,
     )

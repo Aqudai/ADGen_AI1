@@ -5,7 +5,6 @@ from PIL import Image
 
 from app.services import compose, text
 from app.services.banner import render_banner
-from app.services.fallback_scene import draw_fallback_scene
 from app.services.presets import FORMATS, STYLES
 
 NBSP = " "
@@ -79,7 +78,7 @@ def test_product_stands_on_bottom_of_box():
 @pytest.mark.parametrize("format_key", list(FORMATS))
 def test_every_format_and_variant_renders(style, format_key):
     fmt = FORMATS[format_key]
-    scene = draw_fallback_scene(style, seed=3, size=256)  # маленькая сцена — тесты быстрее
+    scene = Image.new("RGB", (256, 256), "tan")  # сцена (от нейросети)
     logo = Image.new("RGB", (300, 100), "navy")
     for variant in fmt.variants:
         banner = render_banner(
@@ -93,16 +92,18 @@ def test_2gis_banner_has_no_text():
     """2GIS запрещает текст на фото: вариант clean — только сцена и товар."""
     fmt = FORMATS["2gis"]
     assert fmt.variants == ("clean",)
-    scene = draw_fallback_scene("minimal", seed=3, size=256)
+    scene = Image.new("RGB", (256, 256), "tan")
     with_text = render_banner(scene, make_cutout(), "Текст", STYLES["minimal"], fmt, "clean")
     other_text = render_banner(scene, make_cutout(), "Другое", STYLES["minimal"], fmt, "clean")
     assert with_text.tobytes() == other_text.tobytes()  # текст акции на картинку не влияет
 
 
-@pytest.mark.parametrize("key", ["pop", "photo", "luxe", "arch", "split"])
+@pytest.mark.parametrize(
+    "key", ["pop", "photo", "luxe", "arch", "split", "pattern", "editorial", "poster"]
+)
 @pytest.mark.parametrize("size", [(1080, 1080), (1080, 1920), (1200, 624)])
 def test_design_templates_render(key, size):
-    """Дизайнерские шаблоны (прототип): рисуются во всех форматах, в т.ч. с казахским текстом."""
+    """Дизайнерские шаблоны рисуются во всех форматах, в т.ч. с казахским текстом."""
     from app.services.templates import Content, render_template
 
     photo = Image.new("RGB", (800, 600), "gray")
@@ -121,3 +122,18 @@ def test_headline_drops_discount_phrase():
     )
     assert content.discount == "−20%"
     assert content.headline == "На роллы"
+
+
+@pytest.mark.parametrize("font", ["serif", "condensed", "rounded", None])
+def test_templates_accept_font_from_request(font):
+    from app.services.templates import Content, render_template
+
+    content = Content(
+        Image.new("RGB", (600, 600), "gray"),
+        make_cutout(),
+        "Акция 10%",
+        "#111111",
+        "#D6B26E",
+        font=font,
+    )
+    assert render_template("pop", content, (540, 540)).size == (540, 540)

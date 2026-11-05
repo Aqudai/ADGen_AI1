@@ -78,11 +78,14 @@ FORMATS = {
     "2gis": BannerFormat("2gis", "2GIS", 1200, 624, variants=("clean",)),
 }
 
+# Подписи вариантов у генераций Спринтов 2–3 (новые подписываются названием шаблона)
 VARIANTS = {
     "overlay": "Текст на фоне",
     "panel": "Текст на плашке",
     "clean": "Без текста, для блока «Скидки»",
+    "ai": "Сцена от нейросети",
 }
+MAX_DESIGN_REQUEST_LENGTH = 200
 
 MAX_PROMO_LENGTH = 120
 
