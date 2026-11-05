@@ -97,3 +97,27 @@ def test_2gis_banner_has_no_text():
     with_text = render_banner(scene, make_cutout(), "Текст", STYLES["minimal"], fmt, "clean")
     other_text = render_banner(scene, make_cutout(), "Другое", STYLES["minimal"], fmt, "clean")
     assert with_text.tobytes() == other_text.tobytes()  # текст акции на картинку не влияет
+
+
+@pytest.mark.parametrize("key", ["pop", "photo", "luxe", "arch", "split"])
+@pytest.mark.parametrize("size", [(1080, 1080), (1080, 1920), (1200, 624)])
+def test_design_templates_render(key, size):
+    """Дизайнерские шаблоны (прототип): рисуются во всех форматах, в т.ч. с казахским текстом."""
+    from app.services.templates import Content, render_template
+
+    photo = Image.new("RGB", (800, 600), "gray")
+    content = Content(
+        photo, make_cutout(), "Жаңа өнім! 30% жеңілдік", "#0F766E", "#FACC15", "Зерно"
+    )
+    banner = render_template(key, content, size, clean=size == (1200, 624))
+    assert banner.size == size
+
+
+def test_headline_drops_discount_phrase():
+    from app.services.templates import Content
+
+    content = Content(
+        Image.new("RGB", (8, 8)), make_cutout(), "Скидка 20% на роллы", "#000000", "#FFFFFF"
+    )
+    assert content.discount == "−20%"
+    assert content.headline == "На роллы"

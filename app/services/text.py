@@ -1,11 +1,13 @@
 """Шаг 4 пайплайна: текст акции и бейдж скидки — рисуем программно (Pillow).
 
 Нейросеть текст НЕ рисует: она путает буквы (особенно кириллицу) и цифры в цене.
-Шрифт Montserrat (лицензия OFL) лежит в app/assets/fonts — поддерживает кириллицу,
-казахские буквы и знак тенге ₸.
+Шрифты (лицензия OFL) лежат в app/assets/fonts. Montserrat поддерживает кириллицу,
+казахские буквы и знак тенге ₸ — он же запасной для «дизайнерских» шрифтов шаблонов,
+в которых этих символов нет.
 """
 
 import re
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
@@ -17,13 +19,50 @@ LINE_SPACING = 1.12
 
 # «-20%», «−15 %», «скидка 30%» → бейдж «−20%»
 DISCOUNT_RE = re.compile(r"[-−–]?\s?(\d{1,2})\s?%")
+# То же вместе со словом «скидка» — чтобы убрать из заголовка, когда скидка нарисована крупно
+DISCOUNT_PHRASE_RE = re.compile(r"(?i)(скидк[аиуе]\s+)?(до\s+)?[-−–]?\s?\d{1,2}\s?%")
 
 Box = tuple[int, int, int, int]
 
 
+@dataclass(frozen=True)
+class Face:
+    """Начертание: файл шрифта и насыщенность (для шрифтов с регулируемой толщиной)."""
+
+    path: Path = HEADLINE_FONT
+    weight: int | None = None
+    line_spacing: float = LINE_SPACING
+
+
+MONTSERRAT = Face()
+
+
 @cache
-def font(size: int, path: Path = HEADLINE_FONT) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(str(path), size)
+def font(
+    size: int, path: Path = HEADLINE_FONT, weight: int | None = None
+) -> ImageFont.FreeTypeFont:
+    fnt = ImageFont.truetype(str(path), size)
+    if weight is not None:
+        fnt.set_variation_by_axes([weight])  # толщина у «переменных» шрифтов задаётся осью wght
+    return fnt
+
+
+def face_font(face: Face, size: int) -> ImageFont.FreeTypeFont:
+    return font(size, face.path, face.weight)
+
+
+@cache
+def face_has_glyph(face: Face, char: str) -> bool:
+    probe = face_font(face, 40)
+    return char.isspace() or bytes(probe.getmask(char)) != bytes(probe.getmask("\ue000"))
+
+
+def face_for(text: str, face: Face) -> Face:
+    """Если в шрифте шаблона нет нужных букв (например, казахских или ₸) — берём Montserrat,
+    чтобы вместо букв не появились пустые квадратики."""
+    if all(face_has_glyph(face, char) for char in drop_missing_glyphs(text)):
+        return face
+    return Face(HEADLINE_FONT, None, face.line_spacing)
 
 
 def find_discount(text: str) -> str | None:
@@ -97,24 +136,27 @@ def wrap(
     return [line for line in lines if line] or [""]
 
 
-def line_height(fnt: ImageFont.FreeTypeFont) -> int:
+def line_height(fnt: ImageFont.FreeTypeFont, spacing: float = LINE_SPACING) -> int:
     ascent, descent = fnt.getmetrics()
-    return int((ascent + descent) * LINE_SPACING)
+    return int((ascent + descent) * spacing)
 
 
-def fit_text(text: str, width: int, height: int, max_size: int, min_size: int):
+def fit_text(
+    text: str, width: int, height: int, max_size: int, min_size: int, face: Face = MONTSERRAT
+):
     """Подбирает самый крупный шрифт, при котором текст влезает в рамку.
 
     Возвращает (шрифт, строки). Если не влезает даже min_size (например, одно очень
     длинное слово) — берём min_size и режем слова, чтобы текст не вылез за край.
     """
+    face = face_for(text, face)
     for size in range(max_size, min_size - 1, -2):
-        fnt = font(size)
+        fnt = face_font(face, size)
         lines = wrap(text, fnt, width)
         fits_width = all(text_width(line, fnt) <= width for line in lines)
-        if fits_width and line_height(fnt) * len(lines) <= height:
+        if fits_width and line_height(fnt, face.line_spacing) * len(lines) <= height:
             return fnt, lines
-    fnt = font(min_size)
+    fnt = face_font(face, min_size)
     return fnt, wrap(text, fnt, width, split_words=True)
 
 
