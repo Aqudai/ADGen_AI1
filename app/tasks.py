@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Banner, Generation, GenerationStatus, GenerationStep, SceneSource
 from app.services import storage
+from app.services.animation import story_video
 from app.services.background import remove_background
 from app.services.banner import render_banner
 from app.services.carousel import render_carousel
@@ -109,12 +110,19 @@ def process_generation(generation_id: str) -> None:
                     qr_url=generation.qr_url,
                 )
                 variant = f"{spec.template}-{number}"
+                if number == 1 and "video" in generation.formats:
+                    story = render_template(spec.template, content, FORMATS["story"].size)
+                    path = storage.generation_file(generation.id, "video-story.mp4")
+                    storage.save_bytes(story_video(story), path)
+                    generation.banners.append(
+                        Banner(format="video", variant="video", image_path=path)
+                    )
                 if number == 1 and "carousel" in generation.formats:
                     # Карусель — одна, в стиле первого (лучше всего подходящего) варианта
                     for slide, image in enumerate(render_carousel(spec, content), start=1):
                         add_banner(generation, image, "carousel", "carousel", f"carousel-{slide}")
                 for format_key in generation.formats:
-                    if format_key == "carousel":
+                    if format_key in ("carousel", "video"):
                         continue
                     fmt = FORMATS[format_key]
                     image = render_template(
@@ -127,7 +135,7 @@ def process_generation(generation_id: str) -> None:
                 if logo is None and generation.brand_name:
                     logo = name_logo(generation.brand_name, primary)
                 for format_key in generation.formats:
-                    if format_key == "carousel":
+                    if format_key in ("carousel", "video"):
                         continue
                     fmt = FORMATS[format_key]
                     image = render_banner(

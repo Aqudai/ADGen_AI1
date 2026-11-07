@@ -78,6 +78,8 @@ FORMATS = {
     "2gis": BannerFormat("2gis", "2GIS", 1200, 624, variants=("clean",)),
     # Карусель Instagram: 4 слайда 4:5 в стиле первого варианта (app/services/carousel.py)
     "carousel": BannerFormat("carousel", "Карусель", 1080, 1350, variants=()),
+    # Видео-сторис MP4: сторис первого варианта с плавным приближением (animation.py)
+    "video": BannerFormat("video", "Видео-сторис", 1080, 1920, variants=()),
 }
 
 # Подписи вариантов у генераций Спринтов 2–3 (новые подписываются названием шаблона)
@@ -87,6 +89,7 @@ VARIANTS = {
     "clean": "Без текста, для блока «Скидки»",
     "ai": "Сцена от нейросети",
     "carousel": "Карусель Instagram — 4 слайда",
+    "video": "Видео-сторис (MP4)",
 }
 MAX_DESIGN_REQUEST_LENGTH = 200
 

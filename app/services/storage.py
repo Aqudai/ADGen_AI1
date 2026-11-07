@@ -35,6 +35,12 @@ def save_image(image: Image.Image, rel_path: str, **save_options) -> None:
     image.save(path, **save_options)
 
 
+def save_bytes(data: bytes, rel_path: str) -> None:
+    path = media_path(rel_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
 def copy_file(source_rel: str, target_rel: str) -> None:
     target = media_path(target_rel)
     target.parent.mkdir(parents=True, exist_ok=True)

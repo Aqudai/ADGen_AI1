@@ -12,8 +12,13 @@
     <figure class="flex flex-col">
       <a href="{{ banner.image_url }}" target="_blank" rel="noopener"
          class="block overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
+        {% if banner.is_video %}
+        <video src="{{ banner.image_url }}" autoplay muted loop playsinline
+               class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}"></video>
+        {% else %}
         <img src="{{ banner.image_url }}" alt="{{ title }}, {{ banner.format_title }}" loading="lazy"
              class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}">
+        {% endif %}
       </a>
       <figcaption class="mt-2 flex items-center justify-between gap-2">
         <span class="text-xs text-slate-500 sm:text-sm">{{ banner.format_title }}</span>

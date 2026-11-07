@@ -204,7 +204,12 @@ class Banner(Base):
     @property
     def download_name(self) -> str:
         # Имя файла уникально в генерации: «pop-1-post» → adgen-pop-1-post.jpg
-        return f"adgen-{Path(self.image_path).stem}.jpg"
+        path = Path(self.image_path)
+        return f"adgen-{path.stem}{path.suffix}"
+
+    @property
+    def is_video(self) -> bool:
+        return self.image_path.endswith(".mp4")
 
     @property
     def aspect_ratio(self) -> str:

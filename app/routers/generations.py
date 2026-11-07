@@ -60,8 +60,8 @@ def render_create_page(
     parent: Generation | None = None,
 ):
     # По умолчанию: уютный стиль и все форматы. При ошибке — то, что ввёл пользователь.
-    # Карусель по умолчанию не отмечена: это 4 дополнительных картинки
-    default_formats = [key for key in FORMATS if key != "carousel"]
+    # Карусель и видео по умолчанию не отмечены: это дополнительные файлы и время
+    default_formats = [key for key in FORMATS if key not in ("carousel", "video")]
     form = form or {"promo_text": "", "design_request": "", "formats": default_formats}
     form = {field: "" for field in EXTRA_FIELDS} | form
     return templates.TemplateResponse(

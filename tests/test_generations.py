@@ -84,7 +84,7 @@ def test_create_page(client):
     assert 'name="promo_text"' in response.text
     assert 'name="design_request"' in response.text
     assert "Ярко и дерзко" in response.text  # подсказки к пожеланию
-    assert response.text.count('name="formats"') == 4
+    assert response.text.count('name="formats"') == 5
 
 
 def test_submit_saves_generation_and_queues_task(client, session_factory, media_dir, fake_queue):
@@ -459,3 +459,18 @@ def test_carousel_slides(client, monkeypatch, session_factory, media_dir):
     assert len(generation.banners) == 4 + 4  # 4 варианта поста + 4 слайда
     page = client.get(f"/generations/{generation.id}").text
     assert "Карусель Instagram" in page
+
+
+def test_video_story(client, monkeypatch, session_factory, media_dir):
+    import av
+
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["video"])
+    videos = [b for b in generation.banners if b.format == "video"]
+    assert len(videos) == 1 and videos[0].is_video
+    assert videos[0].download_name == "adgen-video-story.mp4"
+    with av.open(str(media_dir / videos[0].image_path)) as container:
+        stream = container.streams.video[0]
+        assert (stream.width, stream.height) == (1080, 1920)
+        assert stream.codec_context.name == "h264"
+    page = client.get(f"/generations/{generation.id}").text
+    assert "<video" in page and "Видео-сторис" in page
