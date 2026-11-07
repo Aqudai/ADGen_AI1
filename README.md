@@ -13,6 +13,7 @@
 **Стек:** FastAPI · Pydantic v2 · SQLAlchemy 2 + Alembic · PostgreSQL · Celery + Redis ·
 Jinja2 + HTMX + Tailwind CSS · Docker Compose · pytest · ruff
 
+Полное описание проекта для отчётов и презентаций (план слайдов, ответы на вопросы защиты): [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
 Для отчёта по курсу — бэклог, спринты, ретроспективы и риски: [docs/PROJECT_MANAGEMENT.md](docs/PROJECT_MANAGEMENT.md).
 Архитектура, схемы компонентов и модель данных — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 запуск на сервере — в [docs/DEPLOY.md](docs/DEPLOY.md).
