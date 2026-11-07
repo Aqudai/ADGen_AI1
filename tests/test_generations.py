@@ -84,7 +84,7 @@ def test_create_page(client):
     assert 'name="promo_text"' in response.text
     assert 'name="design_request"' in response.text
     assert "Ярко и дерзко" in response.text  # подсказки к пожеланию
-    assert response.text.count('name="formats"') == 3
+    assert response.text.count('name="formats"') == 4
 
 
 def test_submit_saves_generation_and_queues_task(client, session_factory, media_dir, fake_queue):
@@ -230,7 +230,7 @@ def test_status_partial_shows_gallery_when_done(client, monkeypatch, session_fac
     assert "Скачать все (ZIP)" in response.text
     assert "Вариант 1 ·" in response.text
     assert "Как мы поняли пожелание" in response.text
-    assert response.text.count('download="adgen-post-') == 4
+    assert response.text.count('download="adgen-') == 9  # 4 × (пост + 2GIS) + товар без фона
     assert "для блока «Скидки»" in response.text
 
 
@@ -442,3 +442,20 @@ def test_share_can_be_turned_off(client, monkeypatch, session_factory):
         token = db.get(Generation, generation.id).share_token
     client.post(f"/generations/{generation.id}/share?off=1")
     assert client.get(f"/s/{token}").status_code == 404
+
+
+def test_carousel_slides(client, monkeypatch, session_factory, media_dir):
+    generation = run_pipeline(
+        client,
+        monkeypatch,
+        session_factory,
+        formats=["post", "carousel"],
+        cta="Звоните",
+    )
+    slides = [b for b in generation.banners if b.format == "carousel"]
+    assert len(slides) == 4
+    assert all(Image.open(media_dir / b.image_path).size == (1080, 1350) for b in slides)
+    assert [b.format_title for b in slides] == [f"Слайд {i} из 4" for i in range(1, 5)]
+    assert len(generation.banners) == 4 + 4  # 4 варианта поста + 4 слайда
+    page = client.get(f"/generations/{generation.id}").text
+    assert "Карусель Instagram" in page

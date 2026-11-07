@@ -129,8 +129,8 @@
     {# 4. Форматы #}
     <fieldset>
       <legend class="font-semibold">4. Форматы</legend>
-      <div id="formats" class="mt-3 grid gap-3 sm:grid-cols-3">
-        {% set icons = {"post": "h-7 w-7", "story": "h-9 w-5", "2gis": "h-5 w-9"} %}
+      <div id="formats" class="mt-3 grid gap-3 sm:grid-cols-2">
+        {% set icons = {"post": "h-7 w-7", "story": "h-9 w-5", "2gis": "h-5 w-9", "carousel": "h-8 w-6 shadow-[4px_0_0_0_#c7d2fe]"} %}
         {% for fmt in formats %}
         <label class="cursor-pointer">
           <input type="checkbox" name="formats" value="{{ fmt.key }}" class="peer sr-only"
@@ -141,7 +141,7 @@
             </span>
             <span>
               <span class="block font-semibold">{{ fmt.label }}</span>
-              <span class="block text-sm text-slate-500">{{ fmt.width }}×{{ fmt.height }}</span>
+              <span class="block text-sm text-slate-500">{{ fmt.width }}×{{ fmt.height }}{% if fmt.key == "carousel" %} · 4 слайда{% endif %}</span>
             </span>
           </span>
         </label>

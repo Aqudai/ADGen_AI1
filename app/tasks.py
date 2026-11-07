@@ -13,6 +13,7 @@ from app.models import Banner, Generation, GenerationStatus, GenerationStep, Sce
 from app.services import storage
 from app.services.background import remove_background
 from app.services.banner import render_banner
+from app.services.carousel import render_carousel
 from app.services.design import interpret
 from app.services.presets import FORMATS, STYLES
 from app.services.scene import ai_scene_enabled, generate_ai_scene
@@ -107,7 +108,13 @@ def process_generation(generation_id: str) -> None:
                     qr_url=generation.qr_url,
                 )
                 variant = f"{spec.template}-{number}"
+                if number == 1 and "carousel" in generation.formats:
+                    # Карусель — одна, в стиле первого (лучше всего подходящего) варианта
+                    for slide, image in enumerate(render_carousel(spec, content), start=1):
+                        add_banner(generation, image, "carousel", "carousel", f"carousel-{slide}")
                 for format_key in generation.formats:
+                    if format_key == "carousel":
+                        continue
                     fmt = FORMATS[format_key]
                     image = render_template(
                         spec.template, content, fmt.size, clean=format_key == "2gis"
@@ -119,6 +126,8 @@ def process_generation(generation_id: str) -> None:
                 if logo is None and generation.brand_name:
                     logo = name_logo(generation.brand_name, primary)
                 for format_key in generation.formats:
+                    if format_key == "carousel":
+                        continue
                     fmt = FORMATS[format_key]
                     image = render_banner(
                         scene,
@@ -159,7 +168,9 @@ def favorite_template(db: Session, user_id: int | None) -> str | None:
     return counts.most_common(1)[0][0] if counts else None
 
 
-def add_banner(generation: Generation, image: Image.Image, format_key: str, variant: str) -> None:
-    path = storage.generation_file(generation.id, f"{variant}-{format_key}.jpg")
+def add_banner(
+    generation: Generation, image: Image.Image, format_key: str, variant: str, name: str = ""
+) -> None:
+    path = storage.generation_file(generation.id, f"{name or f'{variant}-{format_key}'}.jpg")
     storage.save_image(image, path, format="JPEG", quality=92)
     generation.banners.append(Banner(format=format_key, variant=variant, image_path=path))

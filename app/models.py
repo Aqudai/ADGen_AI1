@@ -7,6 +7,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy import false as sa_false
@@ -192,11 +193,14 @@ class Banner(Base):
 
     @property
     def format_title(self) -> str:
+        if self.format == "carousel":  # carousel-2.jpg → «Слайд 2 из 4»
+            return f"Слайд {Path(self.image_path).stem.split('-')[-1]} из 4"
         return FORMATS[self.format].title
 
     @property
     def download_name(self) -> str:
-        return f"adgen-{self.format}-{self.variant}.jpg"
+        # Имя файла уникально в генерации: «pop-1-post» → adgen-pop-1-post.jpg
+        return f"adgen-{Path(self.image_path).stem}.jpg"
 
     @property
     def aspect_ratio(self) -> str:

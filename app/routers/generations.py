@@ -58,7 +58,9 @@ def render_create_page(
     parent: Generation | None = None,
 ):
     # По умолчанию: уютный стиль и все форматы. При ошибке — то, что ввёл пользователь.
-    form = form or {"promo_text": "", "design_request": "", "formats": list(FORMATS)}
+    # Карусель по умолчанию не отмечена: это 4 дополнительных картинки
+    default_formats = [key for key in FORMATS if key != "carousel"]
+    form = form or {"promo_text": "", "design_request": "", "formats": default_formats}
     form = {field: "" for field in EXTRA_FIELDS} | form
     return templates.TemplateResponse(
         request,
