@@ -96,7 +96,8 @@ promoText.addEventListener("input", () => {
 
 form.addEventListener("submit", (event) => {
   let message = "";
-  if (!input.files.length) message = "Сначала выберите фото товара.";
+  // При «Изменить» фото можно не загружать — возьмём из прошлой генерации
+  if (!input.files.length && !dropzone.dataset.hasParent) message = "Сначала выберите фото товара.";
   else if (!promoText.value.trim()) message = "Введите текст акции.";
   else if (!form.querySelector('input[name="formats"]:checked')) message = "Выберите хотя бы один формат.";
   if (message) {

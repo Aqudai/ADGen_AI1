@@ -218,8 +218,20 @@ def find_words(text: str, stems) -> list[str]:
     return found
 
 
-def interpret(request: str, promo_text: str = "", brand_colors: tuple[str, str] | None = None):
-    """Запрос → Interpretation с VARIANT_COUNT разными дизайн-заданиями."""
+def interpret(
+    request: str,
+    promo_text: str = "",
+    brand_colors: tuple[str, str] | None = None,
+    template_shift: int = 0,
+    palette_shift: int = 0,
+    favorite: str | None = None,
+):
+    """Запрос → Interpretation с VARIANT_COUNT разными дизайн-заданиями.
+
+    template_shift — «Ещё варианты»: берём следующие темы по списку;
+    palette_shift — «Другие цвета»: те же темы, следующие палитры;
+    favorite — любимая тема пользователя (по «избранному»): ставим её первой.
+    """
     text = f"{request} {promo_text}".lower().replace("ё", "е")
     request_lower = request.lower().replace("ё", "е")
 
@@ -258,10 +270,15 @@ def interpret(request: str, promo_text: str = "", brand_colors: tuple[str, str] 
         palettes = list(best.palettes)
 
     # 5. Варианты: шаблоны настроения + один «неожиданный», чтобы было из чего выбрать
-    templates = list(best.templates[: VARIANT_COUNT - 1])
-    templates.append(next(t for t in ALL_TEMPLATES if t not in templates))
+    # Порядок тем: подходящие настроению, затем все остальные. Первыми — избранная тема
+    order = list(best.templates) + [t for t in ALL_TEMPLATES if t not in best.templates]
+    if favorite in order and template_shift == 0:
+        order.remove(favorite)
+        order.insert(0, favorite)
+    start = (template_shift * VARIANT_COUNT) % len(order)
+    templates = (order[start:] + order[:start])[:VARIANT_COUNT]
     variants = [
-        DesignSpec(template, *palettes[i % len(palettes)], font=font)
+        DesignSpec(template, *palettes[(i + palette_shift) % len(palettes)], font=font)
         for i, template in enumerate(templates)
     ]
 

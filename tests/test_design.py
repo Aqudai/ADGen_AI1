@@ -54,3 +54,19 @@ def test_unknown_request_gives_default_variants():
 
 def test_holiday_phrase():
     assert interpret("Новогодняя акция").mood == "festive"
+
+
+def test_template_shift_gives_other_templates():
+    first = {v.template for v in interpret("уютно").variants}
+    second = {v.template for v in interpret("уютно", template_shift=1).variants}
+    assert first.isdisjoint(second)
+
+
+def test_palette_shift_changes_colors_only():
+    base, shifted = interpret("ярко"), interpret("ярко", palette_shift=1)
+    assert [v.template for v in base.variants] == [v.template for v in shifted.variants]
+    assert base.variants[0].primary != shifted.variants[0].primary
+
+
+def test_favorite_template_goes_first():
+    assert interpret("уютно", favorite="poster").variants[0].template == "poster"

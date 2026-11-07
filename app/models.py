@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -104,6 +105,15 @@ class Generation(Base):
     cta: Mapped[str | None] = mapped_column(String(40))
     contacts: Mapped[str | None] = mapped_column(String(100))  # снимок из профиля бренда
     qr_url: Mapped[str | None] = mapped_column(String(300))  # снимок из профиля бренда
+
+    # «Ещё варианты» / «Другие цвета» / «Изменить» создают новую генерацию от этой (родителя)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("generations.id", ondelete="SET NULL")
+    )
+    template_shift: Mapped[int] = mapped_column(default=0, server_default="0")
+    palette_shift: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Секретная ссылка «поделиться»: /s/<share_token> открывается без входа
+    share_token: Mapped[str | None] = mapped_column(String(32), unique=True)
     # Снимок профиля бренда на момент генерации: если профиль потом поменяют,
     # старые баннеры в истории останутся такими, какими были сделаны
     brand_name: Mapped[str | None] = mapped_column(String(80))
@@ -143,14 +153,14 @@ class Generation(Base):
         """Картинка для списка истории: первый баннер, иначе исходное фото."""
         return self.banners[0].image_url if self.banners else self.source_url
 
-    def banners_by_variant(self) -> list[tuple[str, list["Banner"]]]:
-        """Баннеры по вариантам дизайна: [("Вариант 1 · Яркий", [пост, сторис, 2GIS]), ...]."""
+    def banners_by_variant(self) -> list[tuple[str, str, list["Banner"]]]:
+        """Баннеры по вариантам: [("pop-1", "Вариант 1 · Яркий", [пост, сторис, 2GIS]), ...]."""
         groups: dict[str, list[Banner]] = {}
         for banner in self.banners:
             groups.setdefault(banner.variant, []).append(banner)
         return [
-            (f"Вариант {i} · {items[0].variant_label}", items)
-            for i, items in enumerate(groups.values(), start=1)
+            (variant, f"Вариант {i} · {items[0].variant_label}", items)
+            for i, (variant, items) in enumerate(groups.items(), start=1)
         ]
 
 
@@ -166,6 +176,7 @@ class Banner(Base):
     format: Mapped[str] = mapped_column(String(20))
     variant: Mapped[str] = mapped_column(String(20))
     image_path: Mapped[str] = mapped_column(String(255))
+    favorite: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
 
     generation: Mapped[Generation] = relationship(back_populates="banners")
 

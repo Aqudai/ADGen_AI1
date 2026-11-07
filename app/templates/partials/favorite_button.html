@@ -1,0 +1,6 @@
+{# Звёздочка «нравится» у варианта — HTMX меняет только эту кнопку #}
+<button type="button" hx-post="/generations/{{ generation.id }}/favorite/{{ variant }}" hx-swap="outerHTML"
+        title="{{ 'Убрать из избранного' if favorite else 'В избранное — такие темы будем предлагать первыми' }}"
+        class="rounded-lg px-2 py-1 text-xl leading-none transition hover:bg-amber-50 {{ 'text-amber-400' if favorite else 'text-slate-300 hover:text-amber-400' }}">
+  {{ "★" if favorite else "☆" }}
+</button>

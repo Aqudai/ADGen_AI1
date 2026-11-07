@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Баннеры — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-5xl space-y-10 px-4 py-10 sm:px-6 sm:py-14">
+  <div>
+    <p class="text-sm font-medium text-indigo-600">{{ generation.brand_name or app_name }} делится вариантами баннеров</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight">«{{ generation.promo_text }}»</h1>
+  </div>
+  {% if generation.banners %}
+  <a href="/s/{{ generation.share_token }}/banners.zip"
+     class="inline-block rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+    Скачать все баннеры (ZIP)
+  </a>
+  {% with public=True %}{% include "partials/gallery.html" %}{% endwith %}
+  {% else %}
+  <p class="text-slate-500">Баннеры ещё создаются — обновите страницу через минуту.</p>
+  {% endif %}
+  <p class="text-sm text-slate-400">Сделано в <a href="/" class="font-medium text-indigo-600 hover:underline">{{ app_name }}</a> — рекламные баннеры за минуту.</p>
+</section>
+{% endblock %}

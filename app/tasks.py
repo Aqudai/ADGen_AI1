@@ -1,9 +1,11 @@
 """Фоновые задачи Celery."""
 
 import uuid
+from collections import Counter
 
 from celery.utils.log import get_task_logger
 from PIL import Image
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -45,19 +47,30 @@ def process_generation(generation_id: str) -> None:
 
         generation.status = GenerationStatus.PROCESSING
         try:
-            # 1. Удаляем фон с фото товара (нужен шаблонам, где товар стоит на своём фоне)
+            # 1. Удаляем фон с фото товара (нужен шаблонам, где товар стоит на своём фоне).
+            #    У «Ещё вариантов» и «Изменить» вырезка уже скопирована — второй раз не удаляем.
             set_step(db, generation, GenerationStep.CUTOUT)
             with Image.open(storage.media_path(generation.source_path)) as source:
                 photo = source.convert("RGB")
-            cutout = remove_background(photo)
-            generation.cutout_path = storage.generation_file(generation.id, "cutout.png")
-            storage.save_image(cutout, generation.cutout_path, format="PNG")
+            if generation.cutout_path and storage.media_path(generation.cutout_path).exists():
+                cutout = Image.open(storage.media_path(generation.cutout_path)).convert("RGBA")
+            else:
+                cutout = remove_background(photo)
+                generation.cutout_path = storage.generation_file(generation.id, "cutout.png")
+                storage.save_image(cutout, generation.cutout_path, format="PNG")
 
             # 2. Понимаем пожелание к дизайну → 3–4 дизайн-задания
             brand = None
             if generation.primary_color and generation.secondary_color:
                 brand = (generation.primary_color, generation.secondary_color)
-            design = interpret(generation.design_request or "", generation.promo_text, brand)
+            design = interpret(
+                generation.design_request or "",
+                generation.promo_text,
+                brand,
+                template_shift=generation.template_shift or 0,
+                palette_shift=generation.palette_shift or 0,
+                favorite=favorite_template(db, generation.user_id),
+            )
             generation.design = design.to_dict()
 
             # 3. Сцена от нейросети — необязательный дополнительный вариант
@@ -129,6 +142,21 @@ def process_generation(generation_id: str) -> None:
             generation.error_message = "Не удалось создать баннеры. Попробуйте другое фото."
         generation.step = None
         db.commit()
+
+
+def favorite_template(db: Session, user_id: int | None) -> str | None:
+    """Тема, которую пользователь чаще всего отмечал звёздочкой («pop-1» → «pop»)."""
+    if user_id is None:
+        return None
+    # Пары (генерация, вариант): у одного варианта несколько баннеров (пост, сторис, 2GIS)
+    rows = db.execute(
+        select(Banner.generation_id, Banner.variant)
+        .join(Generation)
+        .where(Generation.user_id == user_id, Banner.favorite)
+        .distinct()
+    ).all()
+    counts = Counter(variant.split("-")[0] for _, variant in rows)
+    return counts.most_common(1)[0][0] if counts else None
 
 
 def add_banner(generation: Generation, image: Image.Image, format_key: str, variant: str) -> None:

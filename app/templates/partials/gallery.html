@@ -1,0 +1,29 @@
+{# Галерея вариантов. public=True — страница «поделиться»: без звёздочек #}
+{% for variant, title, banners in generation.banners_by_variant() %}
+<section>
+  <div class="flex items-center justify-between gap-3">
+    <h2 class="text-lg font-semibold">{{ title }}</h2>
+    {% if not public %}
+    {% with favorite=banners[0].favorite %}{% include "partials/favorite_button.html" %}{% endwith %}
+    {% endif %}
+  </div>
+  <div class="mt-4 grid grid-cols-2 items-start gap-4 sm:grid-cols-3">
+    {% for banner in banners %}
+    <figure class="flex flex-col">
+      <a href="{{ banner.image_url }}" target="_blank" rel="noopener"
+         class="block overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
+        <img src="{{ banner.image_url }}" alt="{{ title }}, {{ banner.format_title }}" loading="lazy"
+             class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}">
+      </a>
+      <figcaption class="mt-2 flex items-center justify-between gap-2">
+        <span class="text-xs text-slate-500 sm:text-sm">{{ banner.format_title }}</span>
+        <a href="{{ banner.image_url }}" download="{{ banner.download_name }}"
+           class="rounded-lg px-2 py-1.5 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50">
+          Скачать
+        </a>
+      </figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}

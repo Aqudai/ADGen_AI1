@@ -1,0 +1,21 @@
+{# Ссылка «поделиться»: открывается без входа, только просмотр и скачивание #}
+<div id="share-box" class="rounded-2xl bg-white p-4 text-sm ring-1 ring-slate-200">
+  {% if generation.share_token %}
+  {% set link = request.base_url ~ "s/" ~ generation.share_token %}
+  <p class="font-semibold">Ссылка для заказчика или напарника</p>
+  <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+    <input readonly value="{{ link }}" onclick="this.select()"
+           class="min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 text-slate-700 ring-1 ring-slate-200">
+    <button type="button" onclick="navigator.clipboard.writeText('{{ link }}'); this.textContent = 'Скопировано'"
+            class="rounded-lg bg-indigo-600 px-3 py-2 font-semibold text-white hover:bg-indigo-700">Копировать</button>
+    <button type="button" hx-post="/generations/{{ generation.id }}/share?off=1" hx-target="#share-box" hx-swap="outerHTML"
+            class="rounded-lg px-3 py-2 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50">Закрыть доступ</button>
+  </div>
+  {% else %}
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-slate-600">Покажите варианты заказчику или напарнику — по ссылке, без регистрации.</p>
+    <button type="button" hx-post="/generations/{{ generation.id }}/share" hx-target="#share-box" hx-swap="outerHTML"
+            class="rounded-lg px-3 py-2 font-semibold text-indigo-600 ring-1 ring-indigo-200 hover:bg-indigo-50">Поделиться ссылкой</button>
+  </div>
+  {% endif %}
+</div>

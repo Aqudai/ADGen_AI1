@@ -72,41 +72,20 @@
   {% endif %}
 
   {% if generation.banners %}
+  {# Действия: скачать всё и «редактор» — новые варианты без повторной загрузки фото #}
   <div class="flex flex-wrap gap-3">
     <a href="/generations/{{ generation.id }}/banners.zip"
        class="rounded-xl bg-indigo-600 px-5 py-3 text-center font-semibold text-white shadow-sm transition hover:bg-indigo-700">
-      Скачать все баннеры (ZIP)
+      Скачать все (ZIP)
     </a>
-    <a href="/create"
-       class="rounded-xl bg-white px-5 py-3 text-center font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
-      Создать ещё
-    </a>
+    {% set action = "rounded-xl bg-white px-4 py-3 text-center font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50" %}
+    <form action="/generations/{{ generation.id }}/more" method="post"><button class="{{ action }}">↻ Ещё варианты</button></form>
+    <form action="/generations/{{ generation.id }}/recolor" method="post"><button class="{{ action }}">🎨 Другие цвета</button></form>
+    <a href="/create?edit={{ generation.id }}" class="{{ action }}">✎ Изменить текст и данные</a>
   </div>
+  {% include "partials/share_box.html" %}
 
-  {% for title, banners in generation.banners_by_variant() %}
-  <section>
-    <h2 class="text-lg font-semibold">{{ title }}</h2>
-    <div class="mt-4 grid grid-cols-2 items-start gap-4 sm:grid-cols-3">
-      {% for banner in banners %}
-      <figure class="flex flex-col">
-        <a href="{{ banner.image_url }}" target="_blank" rel="noopener"
-           class="block overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
-          <img src="{{ banner.image_url }}" alt="{{ title }}, {{ banner.format_title }}" loading="lazy"
-               class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}">
-        </a>
-        <figcaption class="mt-2 flex items-center justify-between gap-2">
-          <span class="text-xs text-slate-500 sm:text-sm">{{ banner.format_title }}</span>
-          <a href="{{ banner.image_url }}" download="{{ banner.download_name }}"
-             class="rounded-lg px-2 py-1.5 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50">
-            Скачать
-          </a>
-        </figcaption>
-      </figure>
-      {% endfor %}
-    </div>
-  </section>
-  {% endfor %}
-
+  {% with public=False %}{% include "partials/gallery.html" %}{% endwith %}
   {% if "2gis" in (generation.formats or []) %}
   <p class="rounded-xl bg-slate-50 p-4 text-sm text-slate-600 ring-1 ring-slate-200">
     Фото 2GIS — для блока «Скидки» в карточке компании, без текста, как требует 2GIS.

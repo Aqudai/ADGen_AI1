@@ -227,7 +227,7 @@ def test_status_partial_shows_gallery_when_done(client, monkeypatch, session_fac
     response = client.get(f"/generations/{generation.id}/status")
 
     assert "hx-trigger" not in response.text  # опрос прекращается
-    assert "Скачать все баннеры" in response.text
+    assert "Скачать все (ZIP)" in response.text
     assert "Вариант 1 ·" in response.text
     assert "Как мы поняли пожелание" in response.text
     assert response.text.count('download="adgen-post-') == 4
@@ -356,3 +356,89 @@ def test_banner_model_labels():
 
 def test_unknown_generation_returns_404(client):
     assert client.get(f"/generations/{uuid.uuid4()}").status_code == 404
+
+
+def test_more_variants_and_other_colors(
+    client, monkeypatch, session_factory, media_dir, fake_queue
+):
+    """«Ещё варианты» — другие темы, «Другие цвета» — те же темы с другими палитрами;
+    фото и вырезка копируются, фон второй раз не удаляется."""
+    from app import tasks
+
+    parent = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    parent_templates = [b.variant.split("-")[0] for b in parent.banners]
+
+    def must_not_remove_background(image):
+        raise AssertionError("вырезка должна браться из родителя")
+
+    monkeypatch.setattr(tasks, "remove_background", must_not_remove_background)
+
+    response = client.post(f"/generations/{parent.id}/more", follow_redirects=False)
+    more = created_generation(response, session_factory)
+    tasks.process_generation(str(more.id))
+    with session_factory() as db:
+        more = db.get(Generation, more.id)
+        more_templates = [b.variant.split("-")[0] for b in more.banners]
+    assert more.parent_id == parent.id and more.template_shift == 1
+    assert more.status == GenerationStatus.DONE
+    assert set(more_templates).isdisjoint(parent_templates)  # следующие 4 темы — другие
+
+    response = client.post(f"/generations/{parent.id}/recolor", follow_redirects=False)
+    recolored = created_generation(response, session_factory)
+    tasks.process_generation(str(recolored.id))
+    with session_factory() as db:
+        recolored = db.get(Generation, recolored.id)
+        assert [b.variant.split("-")[0] for b in recolored.banners] == parent_templates
+        assert recolored.design["variants"][0]["primary"] != parent.design["variants"][0]["primary"]
+
+
+def test_edit_without_new_photo(client, monkeypatch, session_factory, media_dir):
+    parent = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+
+    page = client.get(f"/create?edit={parent.id}").text
+    assert f'value="{parent.id}"' in page and "Фото — из прошлой генерации" in page
+
+    response = submit(client, photo=False, parent_id=str(parent.id), promo_text="Новый текст")
+    child = created_generation(response, session_factory)
+    assert child.promo_text == "Новый текст"
+    assert (media_dir / child.source_path).exists()
+    assert child.cutout_path is not None
+
+
+def test_favorite_toggle_and_preference(client, monkeypatch, session_factory):
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    variant = generation.banners[2].variant  # третий вариант
+
+    response = client.post(f"/generations/{generation.id}/favorite/{variant}")
+    assert "★" in response.text
+    # Следующая генерация предлагает любимую тему первой
+    next_one = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    assert next_one.banners[0].variant.split("-")[0] == variant.split("-")[0]
+
+    assert "☆" in client.post(f"/generations/{generation.id}/favorite/{variant}").text
+    assert client.post(f"/generations/{generation.id}/favorite/nope-9").status_code == 404
+
+
+def test_share_link(client, monkeypatch, session_factory):
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+
+    box = client.post(f"/generations/{generation.id}/share").text
+    with session_factory() as db:
+        token = db.get(Generation, generation.id).share_token
+    assert token and f"/s/{token}" in box
+
+    client.post("/logout")
+    public = client.get(f"/s/{token}")  # без входа
+    assert public.status_code == 200
+    assert "Скачать все баннеры (ZIP)" in public.text and "★" not in public.text
+    assert client.get(f"/s/{token}/banners.zip").headers["content-type"] == "application/zip"
+    assert client.get("/s/wrong-token").status_code == 404
+
+
+def test_share_can_be_turned_off(client, monkeypatch, session_factory):
+    generation = run_pipeline(client, monkeypatch, session_factory, formats=["post"])
+    client.post(f"/generations/{generation.id}/share")
+    with session_factory() as db:
+        token = db.get(Generation, generation.id).share_token
+    client.post(f"/generations/{generation.id}/share?off=1")
+    assert client.get(f"/s/{token}").status_code == 404
