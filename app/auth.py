@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from app.config import settings
 from app.db import DbSession
 from app.models import User
 
@@ -36,6 +37,7 @@ def log_in(request: Request, user: User) -> None:
     request.session.clear()  # новая сессия при входе — старая (возможно, чужая) не переживёт вход
     request.session["user_id"] = user.id
     request.session["email"] = user.email  # для шапки сайта, без запроса к базе
+    request.session["is_admin"] = user.email.lower() in settings.admins
 
 
 def log_out(request: Request) -> None:

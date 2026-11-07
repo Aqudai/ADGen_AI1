@@ -28,6 +28,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Тариф Pro — без дневного лимита (оплата в MVP не подключена, включает администратор)
+    is_pro: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
 
     brand: Mapped["BrandProfile | None"] = relationship(back_populates="user")
 
@@ -132,6 +134,8 @@ class Generation(Base):
     scene_note: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Когда воркер закончил — для статистики «среднее время генерации»
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     banners: Mapped[list["Banner"]] = relationship(
         back_populates="generation", cascade="all, delete-orphan", order_by="Banner.id"

@@ -2,6 +2,7 @@
 
 import uuid
 from collections import Counter
+from datetime import UTC, datetime
 
 from celery.utils.log import get_task_logger
 from PIL import Image
@@ -150,6 +151,7 @@ def process_generation(generation_id: str) -> None:
             generation.status = GenerationStatus.FAILED
             generation.error_message = "Не удалось создать баннеры. Попробуйте другое фото."
         generation.step = None
+        generation.finished_at = datetime.now(UTC)
         db.commit()
 
 

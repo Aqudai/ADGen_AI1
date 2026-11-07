@@ -20,6 +20,7 @@ from app.models import Generation, User
 from app.schemas import BannerRequest, first_error
 from app.services import storage
 from app.services.images import ImageValidationError, prepare_source_image
+from app.services.limits import LIMIT_MESSAGE, limit_reached, used_today
 from app.services.occasions import READY_TEXTS, upcoming
 from app.services.presets import FORMATS, MAX_DESIGN_REQUEST_LENGTH, MAX_PROMO_LENGTH
 from app.tasks import process_generation
@@ -51,6 +52,7 @@ def get_generation_or_404(db: Session, generation_id: uuid.UUID, user: User) -> 
 
 def render_create_page(
     request: Request,
+    db: Session,
     user: User,
     error: str | None = None,
     form: dict | None = None,
@@ -79,6 +81,9 @@ def render_create_page(
             "brand": user.brand,
             "max_promo_length": MAX_PROMO_LENGTH,
             "parent": parent,  # «Изменить»: фото берём из этой генерации
+            "used_today": used_today(db, user),
+            "user_is_pro": user.is_pro,
+            "free_daily_limit": settings.free_daily_limit,
         },
         status_code=status_code,
     )
@@ -92,12 +97,12 @@ def file_too_big(upload: UploadFile, max_mb: int) -> bool:
 def create_page(request: Request, user: CurrentUser, db: DbSession, edit: uuid.UUID | None = None):
     """Новая генерация. С ?edit=<id> — форма заполнена данными прошлой генерации, фото то же."""
     if edit is None:
-        return render_create_page(request, user)
+        return render_create_page(request, db, user)
     parent = get_generation_or_404(db, edit, user)
     form = {"promo_text": parent.promo_text or "", "design_request": parent.design_request or ""}
     form["formats"] = parent.formats or list(FORMATS)
     form |= {field: getattr(parent, field) or "" for field in EXTRA_FIELDS}
-    return render_create_page(request, user, form=form, parent=parent)
+    return render_create_page(request, db, user, form=form, parent=parent)
 
 
 @router.post("/generations")
@@ -129,7 +134,10 @@ def create_generation(
     form |= extra
 
     def error(message: str):
-        return render_create_page(request, user, message, form, status_code=400, parent=parent)
+        return render_create_page(request, db, user, message, form, status_code=400, parent=parent)
+
+    if limit_reached(db, user):
+        return error(LIMIT_MESSAGE.format(limit=settings.free_daily_limit))
 
     try:
         params = BannerRequest(
@@ -239,6 +247,8 @@ def variation_of(parent: Generation, template_shift: int, palette_shift: int) ->
 def more_variants(generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """«Ещё варианты»: следующие 4 темы."""
     parent = get_generation_or_404(db, generation_id, user)
+    if limit_reached(db, user):
+        return RedirectResponse("/pricing?limit=1", status_code=303)
     return enqueue(db, variation_of(parent, parent.template_shift + 1, parent.palette_shift))
 
 
@@ -246,6 +256,8 @@ def more_variants(generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
 def other_colors(generation_id: uuid.UUID, db: DbSession, user: CurrentUser):
     """«Другие цвета»: те же темы, следующие палитры."""
     parent = get_generation_or_404(db, generation_id, user)
+    if limit_reached(db, user):
+        return RedirectResponse("/pricing?limit=1", status_code=303)
     return enqueue(db, variation_of(parent, parent.template_shift, parent.palette_shift + 1))
 
 

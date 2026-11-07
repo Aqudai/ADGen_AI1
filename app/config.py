@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     # Redis: брокер очереди и хранилище результатов Celery
     redis_url: str = "redis://redis:6379/0"
 
+    # Тарифы: сколько генераций в день на бесплатном тарифе (Pro — без ограничений)
+    free_daily_limit: int = 5
+    # Email администраторов через запятую — им доступна страница /admin со статистикой
+    admin_emails: str = ""
+
+    @property
+    def admins(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
     # Папка для загруженных фото и готовых баннеров
     media_dir: Path = Path("media")
     max_upload_mb: int = 10
