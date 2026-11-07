@@ -19,6 +19,8 @@ Jinja2 + HTMX + Tailwind CSS · Docker Compose · pytest · ruff
 
 ---
 
+> **Windows: короткая пошаговая инструкция с командами PowerShell — [docs/SETUP_WINDOWS.md](docs/SETUP_WINDOWS.md).**
+
 ## Что нужно установить
 
 1. **Docker Desktop** — https://www.docker.com/products/docker-desktop/
