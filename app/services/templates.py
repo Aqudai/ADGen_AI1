@@ -20,6 +20,7 @@
 
 from dataclasses import dataclass
 
+import qrcode
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from app.services import compose, text
@@ -51,6 +52,24 @@ class Content:
     brand_name: str | None = None
     logo: Image.Image | None = None
     font: str | None = None  # шрифт заголовка из запроса: serif / condensed / rounded
+    # Дополнительно (всё необязательно)
+    text_kz: str | None = None  # текст на казахском — по закону РК он идёт первым
+    price: str | None = None  # новая цена: «990 ₸»
+    old_price: str | None = None  # старая цена — зачёркнутая в нижней плашке
+    deadline: str | None = None  # «до 15 марта»
+    cta: str | None = None  # призыв: «Закажите сейчас»
+    contacts: str | None = None  # «+7 777 123 45 67 · @sushihouse»
+    qr_url: str | None = None  # ссылка для QR-кода
+
+    @property
+    def has_info(self) -> bool:
+        """Нужна ли нижняя плашка с ценой, сроком, контактами и QR-кодом."""
+        return any((self.old_price, self.deadline, self.cta, self.contacts, self.qr_url))
+
+    @property
+    def full_text(self) -> str:
+        """Весь текст акции: казахский сверху, русский снизу (если казахский указан)."""
+        return f"{self.text_kz}\n{self.promo_text}" if self.text_kz else self.promo_text
 
     def face(self, default: Face) -> Face:
         """Шрифт заголовка: заказанный в запросе, иначе — шрифт шаблона."""
@@ -60,16 +79,18 @@ class Content:
 
     @property
     def discount(self) -> str | None:
-        return text.find_discount(self.promo_text)
+        """Крупная надпись шаблона: новая цена, а если её нет — скидка из текста («−20%»)."""
+        return self.price or text.find_discount(self.promo_text)
 
     @property
     def headline(self) -> str:
         """Текст без «Скидка 20%», когда скидка крупно нарисована отдельно:
         «Скидка 20% на роллы до пятницы» → «На роллы до пятницы»."""
-        if not self.discount:
-            return self.promo_text
+        if self.price or not self.discount:
+            return self.full_text
         rest = text.DISCOUNT_PHRASE_RE.sub("", self.promo_text, count=1).strip(" ,.:—–-!")
-        return rest[:1].upper() + rest[1:] if len(rest) >= 3 else self.promo_text
+        ru = rest[:1].upper() + rest[1:] if len(rest) >= 3 else self.promo_text
+        return f"{self.text_kz}\n{ru}" if self.text_kz else ru
 
 
 # ----------------------------------------------------------------------------- помощники
@@ -264,7 +285,7 @@ def render_photo(c: Content, size, clean=False) -> Image.Image:
         fill=c.secondary,
     )
     text_in_box(
-        canvas, c.promo_text, box, c.face(MONTSERRAT), "#FFFFFF", int(s * 0.1), 26, valign="bottom"
+        canvas, c.full_text, box, c.face(MONTSERRAT), "#FFFFFF", int(s * 0.1), 26, valign="bottom"
     )
     return canvas.convert("RGB")
 
@@ -668,7 +689,7 @@ def render_poster(c: Content, size, clean=False) -> Image.Image:
         w - m,
         int(h * (0.40 if shape == "square" else 0.37)),
     )
-    title = c.promo_text.upper()
+    title = c.full_text.upper()
     text_in_box(
         canvas,
         title,
@@ -736,4 +757,100 @@ TEMPLATES = {
 
 
 def render_template(key: str, content: Content, size, clean: bool = False) -> Image.Image:
-    return TEMPLATES[key].render(content, size, clean)
+    """Рисует баннер темы key. Если есть цена «было», срок, призыв, контакты или QR —
+    снизу добавляется информационная плашка, а сама тема рисуется над ней."""
+    render = TEMPLATES[key].render
+    if clean or not content.has_info:
+        return render(content, size, clean)
+    w, h = size
+    tall = h / w > 1.3
+    # В сторис нижние ~13% закрывает интерфейс Instagram — плашка выше и с запасом снизу
+    band_h = int(h * 0.25) if tall else int(min(size) * 0.2)
+    body = render(content, (w, h - band_h), False)
+    canvas = Image.new("RGB", size, hex_color(mix(content.primary, "#000000", 0.6)))
+    canvas.paste(body, (0, 0))
+    usable_bottom = int(h * 0.87) if tall else h
+    draw_info_band(canvas, content, (0, h - band_h, w, usable_bottom))
+    return canvas
+
+
+def make_qr(url: str, size: int) -> Image.Image:
+    """QR-код на белом квадрате: телефон откроет ссылку (меню, 2GIS, WhatsApp)."""
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    return (
+        qr.make_image(fill_color="black", back_color="white")
+        .get_image()
+        .convert("RGB")
+        .resize(
+            (size, size),
+            Image.NEAREST,  # NEAREST — края модулей остаются чёткими, код читается
+        )
+    )
+
+
+def draw_info_band(canvas: Image.Image, c: Content, box: compose.Box) -> None:
+    """Нижняя плашка: призыв (кнопка), старая цена зачёркнутая, срок, контакты и QR-код."""
+    left, top, right, bottom = box
+    s = min(canvas.size)
+    pad = int(s * 0.045)
+    inner_h = bottom - top - 2 * pad
+    draw = ImageDraw.Draw(canvas)
+    ink = text.readable_text_color(hex_color(mix(c.primary, "#000000", 0.6)))
+
+    x_end = right - pad
+    if c.qr_url:
+        qr = make_qr(c.qr_url, inner_h)
+        canvas.paste(qr, (x_end - inner_h, top + pad))
+        x_end -= inner_h + pad
+
+    x, y = left + pad, top + pad
+    rows_h = inner_h
+    if c.cta:
+        pill_h = int(rows_h * 0.42)
+        fnt, _ = text.fit_text(c.cta, x_end - x, int(pill_h * 0.55), pill_h, 12, UNBOUNDED_BOLD)
+        pill_w = min(int(text.text_width(c.cta, fnt) + pill_h), x_end - x)
+        draw.rounded_rectangle((x, y, x + pill_w, y + pill_h), radius=pill_h // 2, fill=c.secondary)
+        draw.text(
+            (x + pill_w / 2, y + pill_h / 2),
+            c.cta,
+            font=fnt,
+            fill=text.readable_text_color(c.secondary),
+            anchor="mm",
+        )
+        y += pill_h + int(rows_h * 0.08)
+
+    line_h = (
+        int((top + pad + rows_h - y) / 2)
+        if (c.deadline or c.old_price) and c.contacts
+        else top + pad + rows_h - y
+    )
+    if c.old_price or c.deadline:
+        line_x = x
+        fnt = text.face_font(MONTSERRAT_SEMIBOLD, max(12, int(line_h * 0.62)))
+        if c.old_price:
+            label = f"было {c.old_price}"
+            draw.text((line_x, y), label, font=fnt, fill=ink)
+            width = text.text_width(label, fnt)
+            # Зачёркиваем только саму цену, без слова «было»
+            start = line_x + text.text_width("было ", fnt)
+            mid = y + fnt.getbbox(label)[3] * 0.6
+            draw.line(
+                (start, mid, line_x + width, mid), fill=c.secondary, width=max(2, fnt.size // 10)
+            )
+            line_x += width + fnt.size
+        if c.deadline:
+            draw.text((line_x, y), c.deadline, font=fnt, fill=ink)
+        y += line_h
+    if c.contacts:
+        text_in_box(
+            canvas,
+            c.contacts,
+            (x, y, x_end, y + line_h),
+            MONTSERRAT_SEMIBOLD,
+            ink,
+            max(12, int(line_h * 0.62)),
+            12,
+            valign="top",
+        )

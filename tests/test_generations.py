@@ -234,6 +234,41 @@ def test_status_partial_shows_gallery_when_done(client, monkeypatch, session_fac
     assert "для блока «Скидки»" in response.text
 
 
+def test_banner_content_fields_saved_and_used(client, monkeypatch, session_factory, media_dir):
+    client.post(
+        "/profile",
+        data={
+            "business_name": "Кофейня",
+            "primary_color": "#112233",
+            "secondary_color": "#AA0000",
+            "contacts": "+7 777 000 00 00",
+            "qr_url": "wa.me/77770000000",
+        },
+    )
+    generation = run_pipeline(
+        client,
+        monkeypatch,
+        session_factory,
+        formats=["post"],
+        text_kz="Жаңа өнім",
+        price="1990",
+        old_price="2490",
+        deadline="до пятницы",
+        cta="Ждём вас!",
+    )
+    assert generation.status == GenerationStatus.DONE
+    assert generation.price == "1\u00a0990\u00a0₸"
+    assert generation.text_kz == "Жаңа өнім"
+    assert generation.contacts == "+7 777 000 00 00"
+    assert generation.qr_url == "https://wa.me/77770000000"
+
+
+def test_create_page_has_ready_texts_and_extra_fields(client):
+    page = client.get("/create").text
+    assert "Второй десерт в подарок" in page
+    assert 'name="text_kz"' in page and 'name="price"' in page and 'name="cta"' in page
+
+
 def test_ai_scene_variant_added_when_enabled(client, monkeypatch, session_factory):
     """С ключом Hugging Face добавляется пятый вариант — товар на сцене от нейросети."""
     from app import tasks

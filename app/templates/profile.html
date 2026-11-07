@@ -50,6 +50,13 @@
       </label>
     </div>
 
+    <label class="block text-sm font-medium">Контакты <span class="font-normal text-slate-400">— внизу баннера</span>
+      <input name="contacts" maxlength="60" value="{{ brand.contacts or '' }}" placeholder="+7 777 123 45 67 · @mycafe" class="mt-1.5 block w-full rounded-xl border-0 bg-white px-4 py-2.5 shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+    </label>
+    <label class="block text-sm font-medium">Ссылка для QR-кода <span class="font-normal text-slate-400">— меню, 2GIS, WhatsApp или Instagram</span>
+      <input name="qr_url" maxlength="300" value="{{ brand.qr_url or '' }}" placeholder="wa.me/77771234567" class="mt-1.5 block w-full rounded-xl border-0 bg-white px-4 py-2.5 shadow-sm ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+    </label>
+
     <button class="w-full rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700">Сохранить</button>
   </form>
 </section>

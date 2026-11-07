@@ -137,3 +137,38 @@ def test_templates_accept_font_from_request(font):
         font=font,
     )
     assert render_template("pop", content, (540, 540)).size == (540, 540)
+
+
+def test_price_and_info_band():
+    """Цена крупно, нижняя плашка с QR-кодом; для 2GIS — без плашки."""
+    from app.services.templates import Content, render_template
+
+    content = Content(
+        Image.new("RGB", (600, 600), "gray"),
+        make_cutout(),
+        "Сет до пятницы",
+        "#E8552B",
+        "#1E3A8A",
+        text_kz="Жұмаға дейін",
+        price="3 990 ₸",
+        old_price="4 990 ₸",
+        deadline="до 15 ноября",
+        cta="Закажите",
+        contacts="+7 777 123 45 67",
+        qr_url="https://wa.me/1",
+    )
+    assert content.discount == "3 990 ₸"  # крупная надпись — цена
+    assert content.headline == "Жұмаға дейін\nСет до пятницы"  # казахский первым
+    assert content.has_info
+    post = render_template("pop", content, (1080, 1080))
+    band_pixel = post.getpixel((10, 1075))
+    assert band_pixel != (232, 85, 43)  # снизу — плашка, а не фон темы
+    assert render_template("pop", content, (1200, 624), clean=True).size == (1200, 624)
+
+
+def test_qr_code_is_readable_size():
+    from app.services.templates import make_qr
+
+    qr = make_qr("https://wa.me/77771234567", 200)
+    assert qr.size == (200, 200)
+    assert qr.getpixel((5, 5)) == (255, 255, 255)  # белая рамка вокруг кода

@@ -3,6 +3,7 @@
 import io
 import uuid
 import zipfile
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -17,11 +18,15 @@ from app.models import Generation, User
 from app.schemas import BannerRequest, first_error
 from app.services import storage
 from app.services.images import ImageValidationError, prepare_source_image
+from app.services.occasions import READY_TEXTS, upcoming
 from app.services.presets import FORMATS, MAX_DESIGN_REQUEST_LENGTH, MAX_PROMO_LENGTH
 from app.tasks import process_generation
 from app.templating import templates
 
 router = APIRouter()
+
+EXTRA_FIELDS = ("text_kz", "price", "old_price", "deadline", "cta")
+CTA_EXAMPLES = ["Закажите сейчас", "Ждём вас!", "Звоните", "Успейте купить"]
 
 # Подсказки под полем «Каким вы видите баннер?» — по клику подставляются в поле
 DESIGN_EXAMPLES = [
@@ -51,6 +56,7 @@ def render_create_page(
 ):
     # По умолчанию: уютный стиль и все форматы. При ошибке — то, что ввёл пользователь.
     form = form or {"promo_text": "", "design_request": "", "formats": list(FORMATS)}
+    form = {field: "" for field in EXTRA_FIELDS} | form
     return templates.TemplateResponse(
         request,
         "create.html",
@@ -58,6 +64,10 @@ def render_create_page(
             "error": error,
             "form": form,
             "design_examples": DESIGN_EXAMPLES,
+            "ready_texts": READY_TEXTS,
+            "occasion": upcoming(date.today()),
+            "today": date.today(),
+            "cta_examples": CTA_EXAMPLES,
             "max_design_request_length": MAX_DESIGN_REQUEST_LENGTH,
             "formats": FORMATS.values(),
             "max_upload_mb": settings.max_upload_mb,
@@ -85,17 +95,30 @@ def create_generation(
     photo: Annotated[UploadFile | None, File()] = None,
     promo_text: Annotated[str, Form()] = "",
     design_request: Annotated[str, Form()] = "",
+    text_kz: Annotated[str, Form()] = "",
+    price: Annotated[str, Form()] = "",
+    old_price: Annotated[str, Form()] = "",
+    deadline: Annotated[str, Form()] = "",
+    cta: Annotated[str, Form()] = "",
     formats: Annotated[list[str] | None, Form()] = None,
 ):
     """Принимает форму, сохраняет файлы и ставит генерацию в очередь Celery."""
+    extra = {
+        "text_kz": text_kz,
+        "price": price,
+        "old_price": old_price,
+        "deadline": deadline,
+        "cta": cta,
+    }
     form = {"promo_text": promo_text, "design_request": design_request, "formats": formats or []}
+    form |= extra
 
     def error(message: str):
         return render_create_page(request, user, message, form, status_code=400)
 
     try:
         params = BannerRequest(
-            promo_text=promo_text, design_request=design_request, formats=formats or []
+            promo_text=promo_text, design_request=design_request, formats=formats or [], **extra
         )
     except ValidationError as exc:
         return error(first_error(exc))
@@ -115,6 +138,11 @@ def create_generation(
         user_id=user.id,
         promo_text=params.promo_text,
         design_request=params.design_request or None,
+        text_kz=params.text_kz,
+        price=params.price,
+        old_price=params.old_price,
+        deadline=params.deadline,
+        cta=params.cta,
         formats=params.formats,
     )
     generation.source_path = storage.generation_file(generation.id, "source.jpg")
@@ -125,6 +153,8 @@ def create_generation(
         generation.brand_name = user.brand.business_name or None
         generation.primary_color = user.brand.primary_color
         generation.secondary_color = user.brand.secondary_color
+        generation.contacts = user.brand.contacts
+        generation.qr_url = user.brand.qr_url
         if user.brand.logo_path:
             generation.logo_path = storage.generation_file(generation.id, "logo.png")
             storage.copy_file(user.brand.logo_path, generation.logo_path)

@@ -41,6 +41,8 @@ class BrandProfile(Base):
     logo_path: Mapped[str | None] = mapped_column(String(255))
     primary_color: Mapped[str] = mapped_column(String(7), default=DEFAULT_PRIMARY)
     secondary_color: Mapped[str] = mapped_column(String(7), default=DEFAULT_SECONDARY)
+    contacts: Mapped[str | None] = mapped_column(String(100))  # телефон, Instagram — на баннер
+    qr_url: Mapped[str | None] = mapped_column(String(300))  # ссылка для QR-кода на баннере
 
     user: Mapped[User] = relationship(back_populates="brand")
 
@@ -94,6 +96,14 @@ class Generation(Base):
     # Пожелание пользователя («уютно, по-осеннему») и как мы его поняли (design.interpret)
     design_request: Mapped[str | None] = mapped_column(Text)
     design: Mapped[dict | None] = mapped_column(JSON)
+    # Дополнительное содержание баннера (всё необязательно)
+    text_kz: Mapped[str | None] = mapped_column(Text)
+    price: Mapped[str | None] = mapped_column(String(30))
+    old_price: Mapped[str | None] = mapped_column(String(30))
+    deadline: Mapped[str | None] = mapped_column(String(60))
+    cta: Mapped[str | None] = mapped_column(String(40))
+    contacts: Mapped[str | None] = mapped_column(String(100))  # снимок из профиля бренда
+    qr_url: Mapped[str | None] = mapped_column(String(300))  # снимок из профиля бренда
     # Снимок профиля бренда на момент генерации: если профиль потом поменяют,
     # старые баннеры в истории останутся такими, какими были сделаны
     brand_name: Mapped[str | None] = mapped_column(String(80))

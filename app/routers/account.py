@@ -48,6 +48,8 @@ def save_profile(
     business_name: Annotated[str, Form()] = "",
     primary_color: Annotated[str, Form()] = DEFAULT_PRIMARY,
     secondary_color: Annotated[str, Form()] = DEFAULT_SECONDARY,
+    contacts: Annotated[str, Form()] = "",
+    qr_url: Annotated[str, Form()] = "",
     remove_logo: Annotated[bool, Form()] = False,
     logo: Annotated[UploadFile | None, File()] = None,
 ):
@@ -57,6 +59,8 @@ def save_profile(
             business_name=business_name,
             primary_color=primary_color,
             secondary_color=secondary_color,
+            contacts=contacts,
+            qr_url=qr_url,
         )
         logo_image = None
         if logo is not None and logo.filename:
@@ -70,6 +74,8 @@ def save_profile(
             business_name=business_name,
             primary_color=primary_color,
             secondary_color=secondary_color,
+            contacts=contacts,
+            qr_url=qr_url,
             logo_path=brand.logo_path,
         )
         return render_profile(request, entered, 400, error=message)
@@ -77,6 +83,8 @@ def save_profile(
     brand.business_name = form.business_name
     brand.primary_color = form.primary_color
     brand.secondary_color = form.secondary_color
+    brand.contacts = form.contacts
+    brand.qr_url = form.qr_url
     if remove_logo:
         brand.logo_path = None
     if logo_image is not None:

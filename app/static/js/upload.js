@@ -74,6 +74,22 @@ document.querySelectorAll(".design-example").forEach((button) =>
   }),
 );
 
+// Готовые тексты акций и «Заполнить текст» к празднику
+document.querySelectorAll(".ready-text").forEach((button) =>
+  button.addEventListener("click", () => {
+    promoText.value = button.dataset.text;
+    promoCount.textContent = promoText.value.length;
+  }),
+);
+const occasionButton = document.getElementById("occasion-btn");
+if (occasionButton) {
+  occasionButton.addEventListener("click", () => {
+    promoText.value = occasionButton.dataset.promo;
+    promoCount.textContent = promoText.value.length;
+    designRequest.value = occasionButton.dataset.design;
+  });
+}
+
 promoText.addEventListener("input", () => {
   promoCount.textContent = promoText.value.length;
 });

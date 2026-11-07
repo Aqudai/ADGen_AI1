@@ -85,6 +85,13 @@ def process_generation(generation_id: str) -> None:
                     brand_name=generation.brand_name,
                     logo=logo,
                     font=spec.font,
+                    text_kz=generation.text_kz,
+                    price=generation.price,
+                    old_price=generation.old_price,
+                    deadline=generation.deadline,
+                    cta=generation.cta,
+                    contacts=generation.contacts,
+                    qr_url=generation.qr_url,
                 )
                 variant = f"{spec.template}-{number}"
                 for format_key in generation.formats:
