@@ -55,6 +55,10 @@ class BrandProfile(Base):
         return media_url(self.logo_path) if self.logo_path else None
 
 
+# Дополнительные группы баннеров — не «варианты дизайна» (см. banners_by_variant)
+EXTRA_VARIANTS = ("ai", "carousel", "video")
+
+
 class GenerationStatus(StrEnum):
     """Этапы жизни генерации. Храним строкой, чтобы легко добавлять новые этапы."""
 
@@ -155,18 +159,26 @@ class Generation(Base):
 
     @property
     def preview_url(self) -> str:
-        """Картинка для списка истории: первый баннер, иначе исходное фото."""
-        return self.banners[0].image_url if self.banners else self.source_url
+        """Картинка для списка истории: первый баннер-картинка (не видео), иначе исходное фото."""
+        images = [b for b in self.banners if not b.is_video and b.variant not in EXTRA_VARIANTS]
+        return images[0].image_url if images else self.source_url
 
     def banners_by_variant(self) -> list[tuple[str, str, list["Banner"]]]:
-        """Баннеры по вариантам: [("pop-1", "Вариант 1 · Яркий", [пост, сторис, 2GIS]), ...]."""
+        """Баннеры по вариантам: [("pop-1", "Вариант 1 · Яркий", [пост, сторис, 2GIS]), ...].
+
+        Сначала нумерованные варианты дизайна, затем дополнительные группы
+        (сцена от нейросети, карусель, видео) — со своими названиями, без номера.
+        """
         groups: dict[str, list[Banner]] = {}
         for banner in self.banners:
             groups.setdefault(banner.variant, []).append(banner)
-        return [
+        designs = [(v, items) for v, items in groups.items() if v not in EXTRA_VARIANTS]
+        extras = [(v, items) for v, items in groups.items() if v in EXTRA_VARIANTS]
+        result = [
             (variant, f"Вариант {i} · {items[0].variant_label}", items)
-            for i, (variant, items) in enumerate(groups.items(), start=1)
+            for i, (variant, items) in enumerate(designs, start=1)
         ]
+        return result + [(variant, items[0].variant_label, items) for variant, items in extras]
 
 
 class Banner(Base):
@@ -210,6 +222,11 @@ class Banner(Base):
     @property
     def is_video(self) -> bool:
         return self.image_path.endswith(".mp4")
+
+    @property
+    def poster_url(self) -> str:
+        """Обложка видео (кадр-картинка рядом с MP4) — видна до запуска ролика."""
+        return media_url(self.image_path.removesuffix(".mp4") + ".jpg")
 
     @property
     def aspect_ratio(self) -> str:

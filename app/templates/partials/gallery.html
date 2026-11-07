@@ -13,7 +13,7 @@
       <a href="{{ banner.image_url }}" target="_blank" rel="noopener"
          class="block overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
         {% if banner.is_video %}
-        <video src="{{ banner.image_url }}" autoplay muted loop playsinline
+        <video src="{{ banner.image_url }}" poster="{{ banner.poster_url }}" autoplay muted loop playsinline
                class="w-full object-cover" style="aspect-ratio: {{ banner.aspect_ratio }}"></video>
         {% else %}
         <img src="{{ banner.image_url }}" alt="{{ title }}, {{ banner.format_title }}" loading="lazy"

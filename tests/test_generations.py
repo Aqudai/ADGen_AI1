@@ -474,3 +474,15 @@ def test_video_story(client, monkeypatch, session_factory, media_dir):
         assert stream.codec_context.name == "h264"
     page = client.get(f"/generations/{generation.id}").text
     assert "<video" in page and "Видео-сторис" in page
+
+
+def test_extra_groups_go_after_design_variants(client, monkeypatch, session_factory):
+    generation = run_pipeline(
+        client, monkeypatch, session_factory, formats=["post", "carousel", "video"]
+    )
+    titles = [title for _, title, _ in generation.banners_by_variant()]
+    assert titles[0].startswith("Вариант 1 ·") and titles[3].startswith("Вариант 4 ·")
+    assert titles[4:] == ["Видео-сторис (MP4)", "Карусель Instagram — 4 слайда"]
+    assert generation.preview_url.endswith("-post.jpg")  # в истории — картинка, не видео
+    video = next(b for b in generation.banners if b.is_video)
+    assert video.poster_url.endswith("video-story.jpg")

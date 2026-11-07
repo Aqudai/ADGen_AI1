@@ -114,6 +114,10 @@ def process_generation(generation_id: str) -> None:
                     story = render_template(spec.template, content, FORMATS["story"].size)
                     path = storage.generation_file(generation.id, "video-story.mp4")
                     storage.save_bytes(story_video(story), path)
+                    # Обложка видео — тот же кадр картинкой (видна до запуска ролика)
+                    storage.save_image(
+                        story, path.removesuffix(".mp4") + ".jpg", format="JPEG", quality=88
+                    )
                     generation.banners.append(
                         Banner(format="video", variant="video", image_path=path)
                     )
