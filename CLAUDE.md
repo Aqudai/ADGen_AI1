@@ -5,7 +5,8 @@
 
 ## Где что
 - README.md — запуск с нуля и чек-листы проверки по спринтам; docs/ARCHITECTURE.md — архитектура,
-  решения и их причины (для отчётов); docs/DEPLOY.md — сервер.
+  решения и их причины (для отчётов); docs/DEPLOY.md — сервер; docs/PROJECT_MANAGEMENT.md —
+  бэклог, спринты, ретроспективы, риски (обновлять после каждого спринта).
 - Код: app/ (FastAPI + Jinja2/HTMX/Tailwind CDN), шаги пайплайна — app/services/, задача Celery — app/tasks.py.
 - Рабочая ветка: `claude/adgen-ai-banner-service-ivwbkh`.
 

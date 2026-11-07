@@ -139,6 +139,7 @@ erDiagram
         int id PK
         string email UK
         string password_hash "scrypt$соль$хеш"
+        bool is_pro "тариф"
         datetime created_at
     }
     brand_profiles {
@@ -148,6 +149,8 @@ erDiagram
         string logo_path
         string primary_color
         string secondary_color
+        string contacts
+        string qr_url
     }
     generations {
         uuid id PK
@@ -155,11 +158,23 @@ erDiagram
         string status "pending / processing / done / failed"
         string step "cutout / scene / compose"
         text promo_text
-        string style "cozy / festive / minimal"
-        json formats "post, story, 2gis"
+        text design_request "пожелание к дизайну"
+        json design "как поняли пожелание"
+        json formats "post, story, 2gis, carousel, video"
+        text text_kz
+        string price
+        string old_price
+        string deadline
+        string cta
         string brand_name "снимок профиля"
         string primary_color
         string secondary_color
+        string contacts
+        string qr_url
+        uuid parent_id FK "от какой генерации"
+        int template_shift "ещё варианты"
+        int palette_shift "другие цвета"
+        string share_token UK "ссылка поделиться"
         string source_path
         string logo_path
         string cutout_path
@@ -168,13 +183,15 @@ erDiagram
         text scene_note "почему без нейросети"
         text error_message
         datetime created_at
+        datetime finished_at
     }
     banners {
         int id PK
         uuid generation_id FK
-        string format "post / story / 2gis"
-        string variant "overlay / panel / clean"
+        string format "post / story / 2gis / carousel / video"
+        string variant "pop-1 / luxe-2 / carousel / video / ai"
         string image_path
+        bool favorite "в избранном"
     }
 ```
 
@@ -184,6 +201,7 @@ erDiagram
 | `generations` | 1–2 | ✅ миграция `0002`, поля параметров и сцены — миграция `0003` |
 | `banners` | 2 | ✅ миграция `0003` |
 | `brand_profiles` | 3 | ✅ миграция `0004` (там же — снимок бренда в `generations`) |
+| поля развития продукта | 4 | ✅ миграции `0005`–`0008`: пожелание, цена и контакты, редактор и «поделиться», тарифы |
 
 ## 6. Структура проекта
 
@@ -203,14 +221,20 @@ ADGen_AI1/
 │   │   ├── pages.py          #   лендинг
 │   │   ├── auth.py           #   регистрация, вход, выход
 │   │   ├── account.py        #   профиль бренда, история
-│   │   ├── generations.py    #   форма, страница результата, статус для HTMX, ZIP
+│   │   ├── admin.py          #   тарифы /pricing, статистика /admin
+│   │   ├── generations.py    #   форма, результат, редактор, избранное, «поделиться», ZIP
 │   │   └── api.py            #   JSON: /api/hello, /health, /api/generations/{id}
 │   ├── services/             # бизнес-логика, не зависящая от HTTP
 │   │   ├── presets.py        #   справочники: стили, форматы, варианты оформления
 │   │   ├── images.py         #   проверка и подготовка фото и логотипа
 │   │   ├── background.py     #   шаг 1: удаление фона (rembg)
 │   │   ├── design.py         #   понимание пожелания → 4 дизайн-задания
-│   │   ├── templates.py      #   8 дизайн-тем баннеров
+│   │   ├── templates.py      #   8 дизайн-тем, нижняя плашка с ценой, контактами, QR
+│   │   ├── carousel.py       #   карусель Instagram из 4 слайдов
+│   │   ├── animation.py      #   видео-сторис MP4
+│   │   ├── occasions.py      #   календарь праздников РК, готовые тексты акций
+│   │   ├── limits.py         #   тарифы: дневной лимит
+│   │   ├── stats.py          #   статистика для администратора
 │   │   ├── scene.py          #   необязательная сцена от нейросети
 │   │   ├── huggingface.py    #     вызов нейросети и понятные сообщения об ошибках
 │   │   ├── compose.py        #   шаг 3: товар с тенью на сцене, логотип
@@ -226,6 +250,7 @@ ADGen_AI1/
 ├── tests/                    # pytest
 ├── docs/ARCHITECTURE.md      # этот документ
 ├── docs/DEPLOY.md            # запуск на сервере
+├── docs/PROJECT_MANAGEMENT.md # бэклог, спринты, ретроспективы, риски — для курса
 ├── .github/workflows/ci.yml  # CI: линтер и тесты на каждый push
 ├── CLAUDE.md                 # правила проекта для ИИ-ассистента
 ├── media/                    # загруженные и сгенерированные файлы (не в git)
@@ -522,3 +547,20 @@ ADGen_AI1/
   «как мы поняли пожелание».
 - Сцена от нейросети стала необязательным пятым вариантом; запасной программный фон удалён.
 - Миграция `0005` (поля `design_request`, `design`), 127 тестов.
+
+### Спринт 4: развитие продукта
+
+Бэклог, ретроспективы и риски — в [PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md).
+
+- **Содержание баннера:** новая цена крупно и старая зачёркнутая, срок, кнопка-призыв,
+  контакты и QR-код (нижняя плашка; в сторис — выше зоны интерфейса Instagram), текст
+  на казахском первым (закон РК о рекламе). Готовые тексты акций и календарь праздников РК
+  с подсказкой «Заполнить текст».
+- **Редактор:** «Ещё варианты» (следующие темы), «Другие цвета» (следующие палитры),
+  «Изменить» без повторной загрузки фото — фон не удаляется второй раз. Избранное (★):
+  любимая тема предлагается первой. Ссылка «поделиться» без входа.
+- **Новые форматы:** карусель Instagram (4 слайда 1080×1350: обложка, товар, условия,
+  контакты) и видео-сторис MP4 (H.264, 5 с, приближение и появление из затемнения; PyAV).
+- **Бизнес:** тарифы (бесплатно — FREE_DAILY_LIMIT генераций в день, Pro — без лимита,
+  демо-подключение без оплаты), статистика `/admin` для ADMIN_EMAILS.
+- Миграции `0006`–`0008`, 161 тест.
